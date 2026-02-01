@@ -1,8 +1,45 @@
 // SVG Year Chart rendering
 
 const Chart = {
-  cellSize: 12,
+  cellSize: 16,
   cellGap: 2,
+
+  // Create SVG pattern definitions for colorblind accessibility
+  createPatternDefs() {
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+    // Pattern for 0% - diagonal lines (incomplete)
+    const patternNone = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    patternNone.setAttribute('id', 'pattern-none');
+    patternNone.setAttribute('patternUnits', 'userSpaceOnUse');
+    patternNone.setAttribute('width', '4');
+    patternNone.setAttribute('height', '4');
+    patternNone.innerHTML = `
+      <path d="M-1,1 l2,-2 M0,4 l4,-4 M3,5 l2,-2" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+    `;
+    defs.appendChild(patternNone);
+
+    // Pattern for partial - dots
+    const patternPartial = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    patternPartial.setAttribute('id', 'pattern-partial');
+    patternPartial.setAttribute('patternUnits', 'userSpaceOnUse');
+    patternPartial.setAttribute('width', '4');
+    patternPartial.setAttribute('height', '4');
+    patternPartial.innerHTML = `
+      <circle cx="2" cy="2" r="0.8" fill="rgba(0,0,0,0.25)"/>
+    `;
+    defs.appendChild(patternPartial);
+
+    return defs;
+  },
+
+  // Get pattern ID based on completion rate
+  getPatternId(rate, isFuture) {
+    if (isFuture) return null;
+    if (rate === 0) return 'pattern-none';
+    if (rate < 1) return 'pattern-partial';
+    return null; // Solid fill for 100%
+  },
 
   // Generate the year chart SVG (vertical layout)
   async render(container, onDayClick) {
@@ -23,6 +60,11 @@ const Chart = {
     svg.setAttribute('width', width);
     svg.setAttribute('height', height);
     svg.setAttribute('class', 'year-chart');
+    svg.setAttribute('role', 'grid');
+    svg.setAttribute('aria-label', `Year ${year} habit completion chart`);
+
+    // Add pattern definitions for colorblind accessibility
+    svg.appendChild(this.createPatternDefs());
 
     // Get all completion rates
     const completionRates = await this.getYearCompletionRates(year);
@@ -55,17 +97,47 @@ const Chart = {
       rect.setAttribute('data-date', dateStr);
       rect.setAttribute('class', `chart-cell${isToday ? ' today' : ''}`);
 
+      // Accessibility attributes
+      rect.setAttribute('role', 'gridcell');
+      rect.setAttribute('tabindex', isToday ? '0' : '-1');
+      rect.setAttribute('aria-label', `${dateStr}: ${Math.round(rate * 100)}% complete. ${isFuture ? 'Future date.' : 'Click to view details.'}`);
+
       // Tooltip
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       title.textContent = `${dateStr}: ${Math.round(rate * 100)}% complete`;
       rect.appendChild(title);
 
       // Click handler
-      rect.addEventListener('click', () => {
+      const handleClick = () => {
         if (onDayClick) onDayClick(dateStr);
+      };
+      rect.addEventListener('click', handleClick);
+
+      // Keyboard handler
+      rect.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+        // Arrow key navigation
+        this.handleChartNavigation(e, svg, dateStr);
       });
 
       svg.appendChild(rect);
+
+      // Add pattern overlay for colorblind accessibility
+      const patternId = this.getPatternId(rate, isFuture);
+      if (patternId) {
+        const patternRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        patternRect.setAttribute('x', x);
+        patternRect.setAttribute('y', y);
+        patternRect.setAttribute('width', this.cellSize);
+        patternRect.setAttribute('height', this.cellSize);
+        patternRect.setAttribute('rx', 2);
+        patternRect.setAttribute('fill', `url(#${patternId})`);
+        patternRect.setAttribute('pointer-events', 'none');
+        svg.appendChild(patternRect);
+      }
 
       currentDate.setDate(currentDate.getDate() + 1);
     }
@@ -227,6 +299,115 @@ const Chart = {
   getMiniChartColor(completed, isFuture) {
     if (isFuture) return '#2a2a2a';
     if (completed === null) return '#2a2a2a'; // Before habit existed
-    return completed ? '#44ff44' : '#ff4444';
+    return completed ? '#50c878' : '#ff4444';
+  },
+
+  // Render a combined mini year chart showing overall completion
+  async renderCombinedMiniChart(container, onDayClick) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31);
+
+    // Calculate dimensions for vertical layout
+    const cols = 7;
+    const rows = 53;
+    const width = cols * (this.miniCellSize + this.miniCellGap);
+    const height = rows * (this.miniCellSize + this.miniCellGap);
+
+    // Create SVG
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('class', 'mini-year-chart combined-chart');
+
+    // Get overall completion rates (reuse main chart logic)
+    const completionRates = await this.getYearCompletionRates(year);
+
+    // Draw cells for each day
+    let currentDate = new Date(startOfYear);
+    const todayStr = Storage.formatDate(today);
+
+    while (currentDate <= endOfYear) {
+      const dateStr = Storage.formatDate(currentDate);
+      const dayOfYear = this.getDayOfYear(currentDate);
+      const dayOfWeek = currentDate.getDay();
+      const weekOfYear = Math.floor((dayOfYear - 1 + startOfYear.getDay()) / 7);
+
+      const x = dayOfWeek * (this.miniCellSize + this.miniCellGap);
+      const y = weekOfYear * (this.miniCellSize + this.miniCellGap);
+
+      const isFuture = currentDate > today;
+      const isToday = dateStr === todayStr;
+      const rate = completionRates[dateStr] || 0;
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', this.miniCellSize);
+      rect.setAttribute('height', this.miniCellSize);
+      rect.setAttribute('rx', 1);
+      rect.setAttribute('fill', Habits.getColor(rate, isFuture));
+      rect.setAttribute('data-date', dateStr);
+      rect.setAttribute('class', `mini-chart-cell${isToday ? ' today' : ''}`);
+
+      // Tooltip
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = `${dateStr}: ${Math.round(rate * 100)}% complete`;
+      rect.appendChild(title);
+
+      // Click handler
+      rect.addEventListener('click', () => {
+        if (onDayClick) onDayClick(dateStr);
+      });
+
+      svg.appendChild(rect);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    container.innerHTML = '';
+    container.appendChild(svg);
+  },
+
+  // Handle arrow key navigation in chart
+  handleChartNavigation(e, svg, currentDateStr) {
+    const current = new Date(currentDateStr);
+    let targetDate = null;
+
+    switch (e.key) {
+      case 'ArrowRight':
+        targetDate = new Date(current);
+        targetDate.setDate(targetDate.getDate() + 1);
+        break;
+      case 'ArrowLeft':
+        targetDate = new Date(current);
+        targetDate.setDate(targetDate.getDate() - 1);
+        break;
+      case 'ArrowDown':
+        targetDate = new Date(current);
+        targetDate.setDate(targetDate.getDate() + 7);
+        break;
+      case 'ArrowUp':
+        targetDate = new Date(current);
+        targetDate.setDate(targetDate.getDate() - 7);
+        break;
+      default:
+        return;
+    }
+
+    if (targetDate) {
+      e.preventDefault();
+      const targetDateStr = Storage.formatDate(targetDate);
+      const targetCell = svg.querySelector(`[data-date="${targetDateStr}"]`);
+      if (targetCell) {
+        targetCell.setAttribute('tabindex', '0');
+        targetCell.focus();
+        // Remove tabindex from current
+        const currentCell = svg.querySelector(`[data-date="${currentDateStr}"]`);
+        if (currentCell && currentCell !== targetCell) {
+          currentCell.setAttribute('tabindex', '-1');
+        }
+      }
+    }
   }
 };

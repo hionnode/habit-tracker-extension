@@ -164,5 +164,123 @@ const Storage = {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  },
+
+  // ============== Website Tracking Methods ==============
+
+  // Default website categories
+  DEFAULT_CATEGORIES: [
+    { id: 'cat-1', name: 'Productivity', color: '#4a9eff', isDefault: true },
+    { id: 'cat-2', name: 'Code', color: '#50c878', isDefault: true },
+    { id: 'cat-3', name: 'Social Media', color: '#ff9500', isDefault: true },
+    { id: 'cat-4', name: 'Entertainment', color: '#ff4444', isDefault: true }
+  ],
+
+  // Get website categories
+  async getWebsiteCategories() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['websiteCategories'], (result) => {
+        resolve(result.websiteCategories || this.DEFAULT_CATEGORIES);
+      });
+    });
+  },
+
+  // Save website categories
+  async saveWebsiteCategories(categories) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ websiteCategories: categories }, resolve);
+    });
+  },
+
+  // Add or update a category
+  async saveWebsiteCategory(category) {
+    const categories = await this.getWebsiteCategories();
+    const index = categories.findIndex(c => c.id === category.id);
+
+    if (index >= 0) {
+      categories[index] = category;
+    } else {
+      categories.push(category);
+    }
+
+    return this.saveWebsiteCategories(categories);
+  },
+
+  // Delete a category
+  async deleteWebsiteCategory(categoryId) {
+    const categories = await this.getWebsiteCategories();
+    const filtered = categories.filter(c => c.id !== categoryId);
+    return this.saveWebsiteCategories(filtered);
+  },
+
+  // Get website settings (category assignments, custom names)
+  async getWebsiteSettings() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['websiteSettings'], (result) => {
+        resolve(result.websiteSettings || {});
+      });
+    });
+  },
+
+  // Set settings for a specific website
+  async setWebsiteSetting(domain, setting) {
+    const settings = await this.getWebsiteSettings();
+    settings[domain] = { ...settings[domain], ...setting };
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ websiteSettings: settings }, resolve);
+    });
+  },
+
+  // Get website entries for a date range
+  async getWebsiteEntries(startDate, endDate) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['websiteEntries'], (result) => {
+        const allEntries = result.websiteEntries || {};
+        const entries = {};
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = this.formatDate(d);
+          if (allEntries[dateStr]) {
+            entries[dateStr] = allEntries[dateStr];
+          }
+        }
+
+        resolve(entries);
+      });
+    });
+  },
+
+  // Get all website entries
+  async getAllWebsiteEntries() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['websiteEntries'], (result) => {
+        resolve(result.websiteEntries || {});
+      });
+    });
+  },
+
+  // Update website time (used by background script)
+  async updateWebsiteTime(date, domain, seconds, favicon) {
+    const allEntries = await this.getAllWebsiteEntries();
+
+    if (!allEntries[date]) {
+      allEntries[date] = {};
+    }
+
+    if (!allEntries[date][domain]) {
+      allEntries[date][domain] = { totalSeconds: 0, favicon: null };
+    }
+
+    allEntries[date][domain].totalSeconds += seconds;
+    if (favicon) {
+      allEntries[date][domain].favicon = favicon;
+    }
+
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ websiteEntries: allEntries }, resolve);
+    });
   }
 };

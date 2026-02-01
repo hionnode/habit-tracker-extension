@@ -3,7 +3,10 @@
   "name": "Habit Tracker",
   "version": "1.0.0",
   "description": "A minimal habit tracker that replaces your new tab page with a year visualization",
-  "permissions": ["storage"],
+  "permissions": ["storage", "tabs", "idle", "alarms"],
+  "background": {
+    "service_worker": "js/background.js"
+  },
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },

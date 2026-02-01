@@ -107,7 +107,7 @@ const Habits = {
     if (completionRate <= 0.5) {
       return this.interpolateColor('#ff4444', '#ffcc00', completionRate * 2);
     }
-    return this.interpolateColor('#ffcc00', '#44ff44', (completionRate - 0.5) * 2);
+    return this.interpolateColor('#ffcc00', '#50c878', (completionRate - 0.5) * 2);
   },
 
   // Interpolate between two hex colors
