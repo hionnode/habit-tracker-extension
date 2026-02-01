@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Habit Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Left Column: Days Remaining + Vertical Year Chart -->
+    <div class="column column-left">
+      <div class="days-remaining">
+        <span class="days-count" id="daysCount">0</span>
+        <span class="days-label">days remaining</span>
+      </div>
+      <div class="chart-container" id="chartContainer"></div>
+      <div class="selected-day-details" id="selectedDayDetails"></div>
+    </div>
+
+    <!-- Center Column: Today's Habits -->
+    <div class="column column-center">
+      <h2 class="today-title">Today's Habits</h2>
+      <div class="habits-list" id="habitsList"></div>
+      <div class="add-habit-section">
+        <button class="add-habit-btn" id="addHabitBtn">+ Add Habit</button>
+        <span class="habit-counter" id="habitCounter">0/5 habits</span>
+      </div>
+    </div>
+
+    <!-- Right Column: Streaks -->
+    <div class="column column-right">
+      <h2 class="streaks-title">Streaks</h2>
+      <div class="streaks-list" id="streaksList"></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-left">
+      <button class="footer-btn" id="exportBtn">Export</button>
+      <button class="footer-btn" id="importBtn">Import</button>
+      <input type="file" id="importFile" accept=".json" style="display: none;">
+    </div>
+    <div class="footer-right">
+      <button class="footer-btn" id="settingsBtn">Settings</button>
+    </div>
+  </div>
+
+  <!-- Add Habit Modal -->
+  <div class="modal" id="addHabitModal">
+    <div class="modal-content">
+      <h3>Add New Habit</h3>
+      <form id="addHabitForm">
+        <div class="form-group">
+          <label for="habitName">Habit Name</label>
+          <input type="text" id="habitName" required placeholder="e.g., Exercise">
+        </div>
+        <div class="form-group">
+          <label for="habitType">Type</label>
+          <select id="habitType">
+            <option value="binary">Binary (Done/Not Done)</option>
+            <option value="count">Count-based (e.g., 8 glasses of water)</option>
+          </select>
+        </div>
+        <div class="form-group" id="targetGroup" style="display: none;">
+          <label for="habitTarget">Daily Target</label>
+          <input type="number" id="habitTarget" min="1" value="1">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="cancelHabitBtn">Cancel</button>
+          <button type="submit" class="btn-submit">Add Habit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal" id="settingsModal">
+    <div class="modal-content">
+      <h3>Settings</h3>
+      <div class="settings-section">
+        <h4>Manage Habits</h4>
+        <div class="habits-manage-list" id="habitsManageList"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" id="closeSettingsBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/habits.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

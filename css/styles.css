@@ -1,0 +1,603 @@
+/* Dark theme base */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Main container - three column layout */
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  padding: 40px;
+  gap: 60px;
+}
+
+/* Columns */
+.column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.column-left {
+  min-width: 150px;
+  gap: 20px;
+}
+
+.column-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 320px;
+  max-width: 400px;
+}
+
+.column-right {
+  min-width: 200px;
+  max-width: 280px;
+}
+
+/* Days Remaining */
+.days-remaining {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.days-count {
+  font-size: 72px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.days-label {
+  font-size: 14px;
+  color: #888;
+  margin-top: 8px;
+}
+
+/* Year Chart */
+.chart-container {
+  background: #252525;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.year-chart {
+  display: block;
+}
+
+.chart-cell {
+  cursor: pointer;
+  transition: opacity 0.2s, stroke 0.2s;
+}
+
+.chart-cell:hover {
+  opacity: 0.8;
+}
+
+.chart-cell.today {
+  stroke: #fff;
+  stroke-width: 2;
+}
+
+.chart-cell.selected {
+  stroke: #4a9eff;
+  stroke-width: 2;
+}
+
+/* Selected Day Details */
+.selected-day-details {
+  min-height: 30px;
+}
+
+.day-details {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #888;
+}
+
+.day-details-rate {
+  color: #aaa;
+}
+
+/* Today's Habits */
+.today-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #fff;
+  align-self: flex-start;
+  width: 100%;
+}
+
+.habits-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex: 1;
+}
+
+.no-habits {
+  color: #666;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
+.habit-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #252525;
+  padding: 12px 16px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.habit-item.completed {
+  background: #1e3a1e;
+}
+
+/* Checkbox styling */
+.habit-checkbox {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.habit-checkbox input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  width: 0;
+  height: 0;
+}
+
+.checkmark {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #555;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.habit-checkbox input:checked + .checkmark {
+  background: #44ff44;
+  border-color: #44ff44;
+}
+
+.habit-checkbox input:checked + .checkmark::after {
+  content: '✓';
+  color: #1a1a1a;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.habit-status {
+  width: 22px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.habit-name {
+  flex: 1;
+  font-size: 15px;
+}
+
+.habit-value {
+  color: #888;
+  font-size: 14px;
+}
+
+/* Counter for count-based habits */
+.habit-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.counter-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.counter-btn:hover {
+  background: #444;
+}
+
+.counter-value {
+  min-width: 50px;
+  text-align: center;
+  font-size: 14px;
+  color: #aaa;
+}
+
+/* Streaks Section */
+.streaks-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #fff;
+  align-self: flex-start;
+}
+
+.streaks-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.streak-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #252525;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.streak-name {
+  flex: 1;
+  font-size: 15px;
+  color: #e0e0e0;
+}
+
+.streak-value {
+  font-size: 16px;
+  color: #ff9500;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.no-streaks {
+  color: #666;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Streak Cards with Mini Charts */
+.streak-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: #252525;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.streak-card-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+  text-align: center;
+  width: 100%;
+}
+
+.mini-chart-container {
+  padding: 4px;
+}
+
+.mini-year-chart {
+  display: block;
+}
+
+.mini-chart-cell {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.mini-chart-cell:hover {
+  opacity: 0.7;
+}
+
+.mini-chart-cell.today {
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.streak-card-value {
+  font-size: 14px;
+  color: #ff9500;
+  font-weight: 600;
+}
+
+.streak-fire {
+  margin-right: 2px;
+}
+
+/* Add Habit Section */
+.add-habit-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.add-habit-btn {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 2px dashed #444;
+  border-radius: 8px;
+  color: #888;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-habit-btn:hover:not(:disabled) {
+  border-color: #666;
+  color: #aaa;
+}
+
+.add-habit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  border-color: #333;
+  color: #555;
+}
+
+.habit-counter {
+  font-size: 12px;
+  color: #666;
+}
+
+.habit-counter.at-limit {
+  color: #ff9500;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 40px;
+  border-top: 1px solid #333;
+}
+
+.footer-left,
+.footer-right {
+  display: flex;
+  gap: 12px;
+}
+
+.footer-btn {
+  padding: 8px 16px;
+  background: #333;
+  border: none;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.footer-btn:hover {
+  background: #444;
+  color: #fff;
+}
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background: #2a2a2a;
+  padding: 24px;
+  border-radius: 12px;
+  min-width: 360px;
+  max-width: 90%;
+}
+
+.modal-content h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #fff;
+}
+
+/* Form styles */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-cancel,
+.btn-submit {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: #333;
+  color: #aaa;
+}
+
+.btn-cancel:hover {
+  background: #444;
+}
+
+.btn-submit {
+  background: #4a9eff;
+  color: #fff;
+}
+
+.btn-submit:hover {
+  background: #3a8eef;
+}
+
+/* Form Error */
+.form-error {
+  background: #ff444433;
+  border: 1px solid #ff4444;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  color: #ff6666;
+  font-size: 13px;
+}
+
+/* Settings Modal */
+.settings-section {
+  margin-bottom: 20px;
+}
+
+.settings-section h4 {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.habits-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.habit-manage-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #333;
+  border-radius: 6px;
+}
+
+.habit-manage-name {
+  flex: 1;
+  font-size: 14px;
+}
+
+.habit-manage-type {
+  font-size: 12px;
+  color: #666;
+}
+
+.delete-habit-btn {
+  padding: 6px 12px;
+  background: #ff4444;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.delete-habit-btn:hover {
+  background: #ff2222;
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+  .container {
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  .column-left {
+    order: 1;
+  }
+
+  .column-center {
+    order: 2;
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .column-right {
+    order: 3;
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .streaks-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+  }
+}
