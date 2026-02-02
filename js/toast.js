@@ -19,13 +19,21 @@ const Toast = {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-      <span class="toast-message">${message}</span>
-      <button class="toast-close" aria-label="Dismiss">&times;</button>
-    `;
+
+    const messageSpan = document.createElement('span');
+    messageSpan.className = 'toast-message';
+    messageSpan.textContent = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.textContent = '\u00D7';
+
+    toast.appendChild(messageSpan);
+    toast.appendChild(closeBtn);
 
     // Close button handler
-    toast.querySelector('.toast-close').addEventListener('click', () => {
+    closeBtn.addEventListener('click', () => {
       this.dismiss(toast);
     });
 
@@ -84,19 +92,39 @@ const Confirm = {
         destructive = false
       } = options;
 
-      // Create modal
+      // Create modal using safe DOM methods
       const modal = document.createElement('div');
       modal.className = 'modal confirm-modal show';
-      modal.innerHTML = `
-        <div class="modal-content confirm-content">
-          <h3>${title}</h3>
-          <p class="confirm-message">${message}</p>
-          <div class="modal-actions">
-            <button class="btn-cancel" id="confirmCancel">${cancelText}</button>
-            <button class="btn-submit ${destructive ? 'btn-destructive' : ''}" id="confirmOk">${confirmText}</button>
-          </div>
-        </div>
-      `;
+
+      const content = document.createElement('div');
+      content.className = 'modal-content confirm-content';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = title;
+
+      const p = document.createElement('p');
+      p.className = 'confirm-message';
+      p.textContent = message;
+
+      const actions = document.createElement('div');
+      actions.className = 'modal-actions';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn-cancel';
+      cancelBtn.id = 'confirmCancel';
+      cancelBtn.textContent = cancelText;
+
+      const okBtn = document.createElement('button');
+      okBtn.className = `btn-submit ${destructive ? 'btn-destructive' : ''}`;
+      okBtn.id = 'confirmOk';
+      okBtn.textContent = confirmText;
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      content.appendChild(h3);
+      content.appendChild(p);
+      content.appendChild(actions);
+      modal.appendChild(content);
 
       document.body.appendChild(modal);
 
@@ -114,8 +142,8 @@ const Confirm = {
         resolve(result);
       };
 
-      modal.querySelector('#confirmOk').addEventListener('click', () => handleConfirm(true));
-      modal.querySelector('#confirmCancel').addEventListener('click', () => handleConfirm(false));
+      okBtn.addEventListener('click', () => handleConfirm(true));
+      cancelBtn.addEventListener('click', () => handleConfirm(false));
       modal.addEventListener('click', (e) => {
         if (e.target === modal) handleConfirm(false);
       });

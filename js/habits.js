@@ -26,13 +26,16 @@ const Habits = {
     return entry.value >= habit.target;
   },
 
-  // Calculate streak for a habit
+  // Calculate streak for a habit (accounts for freeze days)
   async calculateStreak(habitId) {
     const habits = await Storage.getHabits();
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return 0;
 
     const entries = await Storage.getAllEntries();
+    const freezes = await Storage.getStreakFreezes();
+    const habitFreezes = freezes[habitId] || [];
+
     let streak = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -41,26 +44,34 @@ const Habits = {
     const todayStr = Storage.formatDate(today);
     const todayEntry = entries[todayStr]?.[habitId];
     const completedToday = this.isCompleted(todayEntry, habit);
+    const todayFrozen = habitFreezes.includes(todayStr);
 
-    // Start from yesterday if today not complete
+    // Start from yesterday if today not complete and not frozen
     let checkDate = new Date(today);
-    if (!completedToday) {
+    if (completedToday) {
+      streak = 1;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else if (todayFrozen) {
+      // Today is frozen, count it but don't add to streak
       checkDate.setDate(checkDate.getDate() - 1);
     } else {
-      streak = 1;
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
-    // Count consecutive completed days
+    // Count consecutive completed days (or frozen days)
     while (true) {
       const dateStr = Storage.formatDate(checkDate);
       const entry = entries[dateStr]?.[habitId];
+      const isFrozen = habitFreezes.includes(dateStr);
 
       // Don't count days before habit was created
       if (dateStr < habit.createdAt) break;
 
       if (this.isCompleted(entry, habit)) {
         streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else if (isFrozen) {
+        // Frozen day doesn't break streak but doesn't add to it
         checkDate.setDate(checkDate.getDate() - 1);
       } else {
         break;

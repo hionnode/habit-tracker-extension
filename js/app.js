@@ -4,6 +4,11 @@ const App = {
   selectedDate: null,
   selectedWebsiteDomain: null,
 
+  // Helper to escape HTML for safe insertion (used only for static content with dynamic attributes)
+  escapeAttr(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
+
   async init() {
     this.selectedDate = Storage.formatDate(new Date());
 
@@ -57,6 +62,15 @@ const App = {
     await Chart.render(container, (dateStr) => this.selectDate(dateStr));
   },
 
+  // Habit templates for quick start
+  habitTemplates: [
+    { name: 'Exercise', type: 'binary', target: 1, icon: '\u{1F3CB}' },
+    { name: 'Read', type: 'binary', target: 1, icon: '\u{1F4D6}' },
+    { name: 'Meditate', type: 'binary', target: 1, icon: '\u{1F9D8}' },
+    { name: 'Water', type: 'count', target: 8, icon: '\u{1F4A7}' },
+    { name: 'Sleep 8h', type: 'binary', target: 1, icon: '\u{1F634}' }
+  ],
+
   // Render today's habits or selected day
   async renderHabits() {
     const habits = await Storage.getHabits();
@@ -65,14 +79,76 @@ const App = {
     const todayStr = Storage.formatDate(new Date());
     const isToday = this.selectedDate === todayStr;
 
+    // Clear container
+    container.innerHTML = '';
+
     if (habits.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📋</div>
-          <div class="empty-state-title">No habits yet</div>
-          <div class="empty-state-text">Start tracking habits like Exercise, Reading, or Meditation</div>
-        </div>
-      `;
+      const emptyState = document.createElement('div');
+      emptyState.className = 'empty-state';
+
+      const icon = document.createElement('div');
+      icon.className = 'empty-state-icon';
+      icon.textContent = '\u{1F4CB}'; // clipboard emoji
+
+      const title = document.createElement('div');
+      title.className = 'empty-state-title';
+      title.textContent = 'Start your habit journey';
+
+      const text = document.createElement('div');
+      text.className = 'empty-state-text';
+      text.textContent = 'Pick a template or create your own';
+
+      emptyState.appendChild(icon);
+      emptyState.appendChild(title);
+      emptyState.appendChild(text);
+
+      // Add template buttons
+      const templateGrid = document.createElement('div');
+      templateGrid.className = 'template-grid';
+
+      for (const template of this.habitTemplates) {
+        const btn = document.createElement('button');
+        btn.className = 'template-btn';
+        btn.dataset.templateName = template.name;
+        btn.dataset.templateType = template.type;
+        btn.dataset.templateTarget = template.target;
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'template-icon';
+        iconSpan.textContent = template.icon;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'template-name';
+        nameSpan.textContent = template.name;
+
+        btn.appendChild(iconSpan);
+        btn.appendChild(nameSpan);
+        templateGrid.appendChild(btn);
+      }
+
+      emptyState.appendChild(templateGrid);
+      container.appendChild(emptyState);
+
+      // Bind template button clicks
+      templateGrid.querySelectorAll('.template-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const name = btn.dataset.templateName;
+          const type = btn.dataset.templateType;
+          const target = parseInt(btn.dataset.templateTarget) || 1;
+
+          const habit = Habits.createHabit(name, type, target);
+          try {
+            await Storage.saveHabit(habit);
+            await this.renderHabits();
+            await this.renderStreaks();
+            await this.updateHabitCounter();
+            Toast.success(`Added "${name}" habit`);
+          } catch (error) {
+            Toast.error(error.message);
+          }
+        });
+      });
+
       return;
     }
 
@@ -86,60 +162,135 @@ const App = {
       }
     }
 
-    let html = '';
+    // Check if selected date is in the past (can edit) vs future (cannot)
+    const selectedDateObj = new Date(this.selectedDate + 'T00:00:00');
+    const todayDateObj = new Date(todayStr + 'T00:00:00');
+    const isPastOrToday = selectedDateObj <= todayDateObj;
+    const canEdit = isPastOrToday; // Allow editing today and past dates, not future
+
     for (const habit of habits) {
+      // Check if habit existed on the selected date
+      if (habit.createdAt > this.selectedDate) continue;
+
       const entry = dayEntries[habit.id] || { completed: false, value: 0 };
       const isCompleted = Habits.isCompleted(entry, habit);
       const streak = streaks[habit.id] || 0;
 
-      html += `<div class="habit-item ${isCompleted ? 'completed' : ''}">`;
+      const habitItem = document.createElement('div');
+      habitItem.className = `habit-item ${isCompleted ? 'completed' : ''}${!isToday && canEdit ? ' past-date' : ''}`;
 
       if (habit.type === 'binary') {
-        if (isToday) {
-          html += `
-            <label class="habit-checkbox">
-              <input type="checkbox"
-                     data-habit-id="${habit.id}"
-                     ${isCompleted ? 'checked' : ''}>
-              <span class="checkmark"></span>
-            </label>
-          `;
+        if (canEdit) {
+          const label = document.createElement('label');
+          label.className = 'habit-checkbox';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.dataset.habitId = habit.id;
+          checkbox.checked = isCompleted;
+
+          const checkmark = document.createElement('span');
+          checkmark.className = 'checkmark';
+
+          label.appendChild(checkbox);
+          label.appendChild(checkmark);
+          habitItem.appendChild(label);
         } else {
-          html += `<span class="habit-status">${isCompleted ? '✓' : '○'}</span>`;
+          const status = document.createElement('span');
+          status.className = 'habit-status';
+          status.textContent = isCompleted ? '\u2713' : '\u25CB';
+          habitItem.appendChild(status);
         }
-        html += `<span class="habit-name">${habit.name}</span>`;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'habit-name';
+        nameSpan.textContent = habit.name;
+        habitItem.appendChild(nameSpan);
+
+        // Add inline streak for today view
+        if (isToday && streak > 0) {
+          const streakSpan = document.createElement('span');
+          streakSpan.className = 'habit-inline-streak';
+          streakSpan.textContent = `\u{1F525}${streak}`;
+          habitItem.appendChild(streakSpan);
+        }
       } else {
-        html += `<span class="habit-name">${habit.name}</span>`;
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'habit-name';
+        nameSpan.textContent = habit.name;
+        habitItem.appendChild(nameSpan);
+
+        // Add inline streak for today view (before counter)
+        if (isToday && streak > 0) {
+          const streakSpan = document.createElement('span');
+          streakSpan.className = 'habit-inline-streak';
+          streakSpan.textContent = `\u{1F525}${streak}`;
+          habitItem.appendChild(streakSpan);
+        }
+
         const progressPercent = Math.min(100, (entry.value / habit.target) * 100);
-        if (isToday) {
-          html += `
-            <div class="habit-counter">
-              <button class="counter-btn minus" data-habit-id="${habit.id}">−</button>
-              <div class="habit-progress">
-                <span class="counter-value">${entry.value}/${habit.target}</span>
-                <div class="habit-progress-bar">
-                  <div class="habit-progress-fill" style="width: ${progressPercent}%"></div>
-                </div>
-              </div>
-              <button class="counter-btn plus" data-habit-id="${habit.id}">+</button>
-            </div>
-          `;
+
+        if (canEdit) {
+          const counter = document.createElement('div');
+          counter.className = 'habit-counter';
+
+          const minusBtn = document.createElement('button');
+          minusBtn.className = 'counter-btn minus';
+          minusBtn.dataset.habitId = habit.id;
+          minusBtn.textContent = '\u2212';
+
+          const progress = document.createElement('div');
+          progress.className = 'habit-progress';
+
+          const counterValue = document.createElement('span');
+          counterValue.className = 'counter-value';
+          counterValue.textContent = `${entry.value}/${habit.target}`;
+
+          const progressBar = document.createElement('div');
+          progressBar.className = 'habit-progress-bar';
+
+          const progressFill = document.createElement('div');
+          progressFill.className = 'habit-progress-fill';
+          progressFill.style.width = `${progressPercent}%`;
+
+          progressBar.appendChild(progressFill);
+          progress.appendChild(counterValue);
+          progress.appendChild(progressBar);
+
+          const plusBtn = document.createElement('button');
+          plusBtn.className = 'counter-btn plus';
+          plusBtn.dataset.habitId = habit.id;
+          plusBtn.textContent = '+';
+
+          counter.appendChild(minusBtn);
+          counter.appendChild(progress);
+          counter.appendChild(plusBtn);
+          habitItem.appendChild(counter);
         } else {
-          html += `
-            <div class="habit-progress">
-              <span class="habit-value">${entry.value}/${habit.target}</span>
-              <div class="habit-progress-bar">
-                <div class="habit-progress-fill" style="width: ${progressPercent}%"></div>
-              </div>
-            </div>
-          `;
+          const progress = document.createElement('div');
+          progress.className = 'habit-progress';
+
+          const valueSpan = document.createElement('span');
+          valueSpan.className = 'habit-value';
+          valueSpan.textContent = `${entry.value}/${habit.target}`;
+
+          const progressBar = document.createElement('div');
+          progressBar.className = 'habit-progress-bar';
+
+          const progressFill = document.createElement('div');
+          progressFill.className = 'habit-progress-fill';
+          progressFill.style.width = `${progressPercent}%`;
+
+          progressBar.appendChild(progressFill);
+          progress.appendChild(valueSpan);
+          progress.appendChild(progressBar);
+          habitItem.appendChild(progress);
         }
       }
 
-      html += `</div>`;
+      container.appendChild(habitItem);
     }
 
-    container.innerHTML = html;
     this.bindHabitEvents();
   },
 
@@ -148,70 +299,137 @@ const App = {
     const habits = await Storage.getHabits();
     const container = document.getElementById('streaksList');
 
+    // Clear container
+    container.innerHTML = '';
+
     if (habits.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📊</div>
-          <div class="empty-state-title">No habits yet</div>
-          <div class="empty-state-text">Add habits to see your yearly progress here</div>
-        </div>
-      `;
+      const emptyState = document.createElement('div');
+      emptyState.className = 'empty-state';
+
+      const icon = document.createElement('div');
+      icon.className = 'empty-state-icon';
+      icon.textContent = '\u{1F4CA}'; // chart emoji
+
+      const title = document.createElement('div');
+      title.className = 'empty-state-title';
+      title.textContent = 'No habits yet';
+
+      const text = document.createElement('div');
+      text.className = 'empty-state-text';
+      text.textContent = 'Add habits to see your yearly progress here';
+
+      emptyState.appendChild(icon);
+      emptyState.appendChild(title);
+      emptyState.appendChild(text);
+      container.appendChild(emptyState);
       return;
     }
 
     // Calculate all streaks and stats
-    const streaks = [];
+    const streaksData = [];
     let overallBestStreak = 0;
     let totalCompleted = 0;
     for (const habit of habits) {
       const streak = await Habits.calculateStreak(habit.id);
       const bestStreak = await Habits.calculateBestStreak(habit.id);
       const stats = await Habits.getCompletionStats(habit.id);
-      streaks.push({ habit, streak, bestStreak, stats });
+      streaksData.push({ habit, streak, bestStreak, stats });
       if (bestStreak > overallBestStreak) overallBestStreak = bestStreak;
       totalCompleted += stats.completedDays;
     }
 
     // Build streak list with horizontal year charts
-    let html = '<div class="streak-list-with-charts">';
-    for (const { habit, streak, stats } of streaks) {
+    const streakList = document.createElement('div');
+    streakList.className = 'streak-list-with-charts';
+
+    for (const { habit, streak, stats } of streaksData) {
       const completionPercent = Math.round(stats.completionRate * 100);
-      html += `
-        <div class="streak-row-with-chart" data-habit-id="${habit.id}">
-          <div class="streak-row-header">
-            <span class="streak-row-name">${habit.name}</span>
-            <span class="streak-row-stats">
-              <span class="streak-completion">${completionPercent}%</span>
-              <span class="streak-row-value"><span class="streak-fire">🔥</span> ${streak}</span>
-            </span>
-          </div>
-          <div class="streak-horizontal-chart" id="horizontalChart-${habit.id}"></div>
-        </div>
-      `;
+
+      const row = document.createElement('div');
+      row.className = 'streak-row-with-chart';
+      row.dataset.habitId = habit.id;
+
+      const header = document.createElement('div');
+      header.className = 'streak-row-header';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'streak-row-name';
+      nameSpan.textContent = habit.name;
+
+      const statsSpan = document.createElement('span');
+      statsSpan.className = 'streak-row-stats';
+
+      const completionSpan = document.createElement('span');
+      completionSpan.className = 'streak-completion';
+      completionSpan.textContent = `${completionPercent}%`;
+
+      const valueSpan = document.createElement('span');
+      valueSpan.className = 'streak-row-value';
+
+      const fireSpan = document.createElement('span');
+      fireSpan.className = 'streak-fire';
+      fireSpan.textContent = '\u{1F525}'; // fire emoji
+
+      valueSpan.appendChild(fireSpan);
+      valueSpan.appendChild(document.createTextNode(` ${streak}`));
+
+      statsSpan.appendChild(completionSpan);
+      statsSpan.appendChild(valueSpan);
+      header.appendChild(nameSpan);
+      header.appendChild(statsSpan);
+
+      const chartContainer = document.createElement('div');
+      chartContainer.className = 'streak-horizontal-chart';
+      chartContainer.id = `horizontalChart-${habit.id}`;
+
+      row.appendChild(header);
+      row.appendChild(chartContainer);
+      streakList.appendChild(row);
     }
-    html += '</div>';
+
+    container.appendChild(streakList);
 
     // Add summary
-    html += `
-      <div class="streaks-summary">
-        <div class="summary-item">
-          <span class="summary-label">Best streak (all habits)</span>
-          <span class="summary-value">${overallBestStreak} day${overallBestStreak !== 1 ? 's' : ''}</span>
-        </div>
-        <div class="summary-item">
-          <span class="summary-label">Total completions</span>
-          <span class="summary-value">${totalCompleted}</span>
-        </div>
-      </div>
-    `;
+    const summary = document.createElement('div');
+    summary.className = 'streaks-summary';
 
-    container.innerHTML = html;
+    const bestStreakItem = document.createElement('div');
+    bestStreakItem.className = 'summary-item';
+
+    const bestLabel = document.createElement('span');
+    bestLabel.className = 'summary-label';
+    bestLabel.textContent = 'Best streak (all habits)';
+
+    const bestValue = document.createElement('span');
+    bestValue.className = 'summary-value';
+    bestValue.textContent = `${overallBestStreak} day${overallBestStreak !== 1 ? 's' : ''}`;
+
+    bestStreakItem.appendChild(bestLabel);
+    bestStreakItem.appendChild(bestValue);
+
+    const totalItem = document.createElement('div');
+    totalItem.className = 'summary-item';
+
+    const totalLabel = document.createElement('span');
+    totalLabel.className = 'summary-label';
+    totalLabel.textContent = 'Total completions';
+
+    const totalValue = document.createElement('span');
+    totalValue.className = 'summary-value';
+    totalValue.textContent = String(totalCompleted);
+
+    totalItem.appendChild(totalLabel);
+    totalItem.appendChild(totalValue);
+
+    summary.appendChild(bestStreakItem);
+    summary.appendChild(totalItem);
+    container.appendChild(summary);
 
     // Render horizontal year charts for each habit
-    for (const { habit } of streaks) {
-      const chartContainer = document.getElementById(`horizontalChart-${habit.id}`);
-      if (chartContainer) {
-        await Chart.renderHorizontalYearChart(chartContainer, habit.id);
+    for (const { habit } of streaksData) {
+      const chartEl = document.getElementById(`horizontalChart-${habit.id}`);
+      if (chartEl) {
+        await Chart.renderHorizontalYearChart(chartEl, habit.id);
       }
     }
 
@@ -224,11 +442,16 @@ const App = {
     });
   },
 
+  // Currently viewed habit in detail modal
+  detailHabitId: null,
+
   // Show habit detail modal with year view
   async showHabitDetail(habitId) {
     const habits = await Storage.getHabits();
     const habit = habits.find(h => h.id === habitId);
     if (!habit) return;
+
+    this.detailHabitId = habitId;
 
     const currentStreak = await Habits.calculateStreak(habitId);
     const bestStreak = await Habits.calculateBestStreak(habitId);
@@ -249,12 +472,52 @@ const App = {
     document.getElementById('habitDetailCompletionRate').textContent = `${Math.round(stats.completionRate * 100)}%`;
     document.getElementById('habitDetailCreatedAt').textContent = formattedDate;
 
+    // Update freeze section
+    await this.updateFreezeSection(habitId);
+
     // Render year chart
     const chartContainer = document.getElementById('habitDetailYearChart');
     await Chart.renderHabitYearChart(chartContainer, habitId);
 
     // Show modal
     this.openModal('habitDetailModal');
+  },
+
+  // Update the freeze section in habit detail modal
+  async updateFreezeSection(habitId) {
+    const freezes = await Storage.getStreakFreezes();
+    const habitFreezes = freezes[habitId] || [];
+    const freezeCount = habitFreezes.length;
+
+    // Update freeze count display
+    document.getElementById('freezeCount').textContent = `${freezeCount} used`;
+
+    // Check if yesterday was missed and can be frozen
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = Storage.formatDate(yesterday);
+
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    const entries = await Storage.getAllEntries();
+    const yesterdayEntry = entries[yesterdayStr]?.[habitId];
+    const yesterdayCompleted = Habits.isCompleted(yesterdayEntry, habit);
+    const yesterdayFrozen = habitFreezes.includes(yesterdayStr);
+
+    const freezeBtn = document.getElementById('freezeYesterdayBtn');
+    if (yesterdayCompleted) {
+      freezeBtn.textContent = 'Yesterday completed';
+      freezeBtn.disabled = true;
+    } else if (yesterdayFrozen) {
+      freezeBtn.textContent = 'Yesterday frozen';
+      freezeBtn.disabled = true;
+    } else if (yesterdayStr < habit.createdAt) {
+      freezeBtn.textContent = 'Habit not created yet';
+      freezeBtn.disabled = true;
+    } else {
+      freezeBtn.textContent = 'Freeze Yesterday';
+      freezeBtn.disabled = false;
+    }
   },
 
   // Track if we've already celebrated today
@@ -282,6 +545,33 @@ const App = {
     }
 
     const allComplete = count > 0 && completedToday === count;
+
+    // Update progress ring
+    const progressRingFill = document.getElementById('progressRingFill');
+    const progressRingText = document.getElementById('progressRingText');
+    const progressRingContainer = document.getElementById('progressRingContainer');
+
+    if (progressRingFill && progressRingText) {
+      const circumference = 2 * Math.PI * 16; // r=16
+      const progress = count > 0 ? completedToday / count : 0;
+      const offset = circumference * (1 - progress);
+
+      progressRingFill.style.strokeDashoffset = offset;
+      progressRingText.textContent = `${completedToday}/${count}`;
+
+      if (allComplete && count > 0) {
+        progressRingFill.classList.add('all-done');
+        progressRingText.classList.add('all-done');
+      } else {
+        progressRingFill.classList.remove('all-done');
+        progressRingText.classList.remove('all-done');
+      }
+
+      // Hide ring if no habits
+      if (progressRingContainer) {
+        progressRingContainer.style.display = count > 0 ? 'flex' : 'none';
+      }
+    }
 
     if (counterEl) {
       if (allComplete) {
@@ -405,13 +695,27 @@ const App = {
         const habitId = e.target.dataset.habitId;
         const habitItem = e.target.closest('.habit-item');
         const value = e.target.checked ? 1 : 0;
+        const wasCompleted = habitItem.classList.contains('completed');
 
         habitItem.classList.add('saving');
         await Storage.saveEntry(this.selectedDate, habitId, value);
+
+        // Trigger success pulse if completing (not uncompleting)
+        const shouldPulse = value === 1 && !wasCompleted;
+
         await this.renderChart();
         await this.renderHabits();
         await this.renderStreaks();
         await this.updateHabitCounter();
+
+        // Apply animation after re-render
+        if (shouldPulse) {
+          const newHabitItem = document.querySelector(`[data-habit-id="${habitId}"]`)?.closest('.habit-item');
+          if (newHabitItem) {
+            newHabitItem.classList.add('success-pulse');
+            setTimeout(() => newHabitItem.classList.remove('success-pulse'), 600);
+          }
+        }
       });
     });
 
@@ -421,17 +725,36 @@ const App = {
         const habitId = e.target.dataset.habitId;
         const habitItem = e.target.closest('.habit-item');
         const isPlus = e.target.classList.contains('plus');
+        const wasCompleted = habitItem.classList.contains('completed');
 
+        const habits = await Storage.getHabits();
+        const habit = habits.find(h => h.id === habitId);
         const entries = await Storage.getAllEntries();
         const entry = entries[this.selectedDate]?.[habitId] || { value: 0 };
         const newValue = Math.max(0, entry.value + (isPlus ? 1 : -1));
 
+        // Check if this will complete the habit
+        const willComplete = habit && newValue >= habit.target;
+
         habitItem.classList.add('saving');
         await Storage.saveEntry(this.selectedDate, habitId, newValue);
+
+        // Trigger success pulse if just reached target
+        const shouldPulse = willComplete && !wasCompleted;
+
         await this.renderChart();
         await this.renderHabits();
         await this.renderStreaks();
         await this.updateHabitCounter();
+
+        // Apply animation after re-render
+        if (shouldPulse) {
+          const newHabitItem = document.querySelector(`[data-habit-id="${habitId}"]`)?.closest('.habit-item');
+          if (newHabitItem) {
+            newHabitItem.classList.add('success-pulse');
+            setTimeout(() => newHabitItem.classList.remove('success-pulse'), 600);
+          }
+        }
       });
     });
   },
@@ -470,6 +793,29 @@ const App = {
     // Close habit detail modal
     document.getElementById('closeHabitDetailBtn').addEventListener('click', () => {
       this.closeModal('habitDetailModal');
+    });
+
+    // Freeze yesterday button
+    document.getElementById('freezeYesterdayBtn').addEventListener('click', async () => {
+      if (!this.detailHabitId) return;
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = Storage.formatDate(yesterday);
+
+      await Storage.addStreakFreeze(this.detailHabitId, yesterdayStr);
+
+      // Update displays
+      await this.updateFreezeSection(this.detailHabitId);
+      const currentStreak = await Habits.calculateStreak(this.detailHabitId);
+      document.getElementById('habitDetailCurrentStreak').textContent = currentStreak;
+
+      // Refresh main views
+      await this.renderStreaks();
+      await this.renderHabits();
+      await this.renderChart();
+
+      Toast.success('Streak protected! Yesterday is now frozen.');
     });
 
     // Website category change in detail modal
@@ -646,20 +992,57 @@ const App = {
     const habits = await Storage.getHabits();
     const container = document.getElementById('habitsManageList');
 
+    // Clear container
+    container.innerHTML = '';
+
     if (habits.length === 0) {
-      container.innerHTML = '<div class="no-habits">No habits to manage.</div>';
+      const noHabits = document.createElement('div');
+      noHabits.className = 'no-habits';
+      noHabits.textContent = 'No habits to manage.';
+      container.appendChild(noHabits);
     } else {
-      let html = '';
       for (const habit of habits) {
-        html += `
-          <div class="habit-manage-item">
-            <span class="habit-manage-name">${habit.name}</span>
-            <span class="habit-manage-type">${habit.type === 'binary' ? 'Binary' : `Count (${habit.target})`}</span>
-            <button class="delete-habit-btn" data-habit-id="${habit.id}">Delete</button>
-          </div>
-        `;
+        const item = document.createElement('div');
+        item.className = 'habit-manage-item';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'habit-manage-name';
+        nameSpan.textContent = habit.name;
+
+        const typeSpan = document.createElement('span');
+        typeSpan.className = 'habit-manage-type';
+        typeSpan.textContent = habit.type === 'binary' ? 'Binary' : `Count (${habit.target})`;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'habit-manage-actions';
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-habit-btn';
+        editBtn.dataset.habitId = habit.id;
+        editBtn.textContent = 'Edit';
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-habit-btn';
+        deleteBtn.dataset.habitId = habit.id;
+        deleteBtn.textContent = 'Delete';
+
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(deleteBtn);
+
+        item.appendChild(nameSpan);
+        item.appendChild(typeSpan);
+        item.appendChild(actionsDiv);
+        container.appendChild(item);
       }
-      container.innerHTML = html;
+
+      // Bind edit buttons
+      container.querySelectorAll('.edit-habit-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const habitId = e.target.dataset.habitId;
+          this.closeModal('settingsModal');
+          this.openEditHabitModal(habitId);
+        });
+      });
 
       // Bind delete buttons
       container.querySelectorAll('.delete-habit-btn').forEach(btn => {
@@ -695,18 +1078,34 @@ const App = {
     const categories = await Storage.getWebsiteCategories();
     const container = document.getElementById('categoriesManageList');
 
-    let html = '';
-    for (const category of categories) {
-      html += `
-        <div class="category-manage-item">
-          <span class="category-color-dot" style="background: ${category.color}"></span>
-          <span class="category-manage-name">${category.name}</span>
-          ${!category.isDefault ? `<button class="delete-category-btn" data-category-id="${category.id}">Delete</button>` : ''}
-        </div>
-      `;
-    }
+    // Clear container
+    container.innerHTML = '';
 
-    container.innerHTML = html;
+    for (const category of categories) {
+      const item = document.createElement('div');
+      item.className = 'category-manage-item';
+
+      const colorDot = document.createElement('span');
+      colorDot.className = 'category-color-dot';
+      colorDot.style.background = category.color;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'category-manage-name';
+      nameSpan.textContent = category.name;
+
+      item.appendChild(colorDot);
+      item.appendChild(nameSpan);
+
+      if (!category.isDefault) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-category-btn';
+        deleteBtn.dataset.categoryId = category.id;
+        deleteBtn.textContent = 'Delete';
+        item.appendChild(deleteBtn);
+      }
+
+      container.appendChild(item);
+    }
 
     // Bind delete buttons
     container.querySelectorAll('.delete-category-btn').forEach(btn => {
@@ -767,21 +1166,21 @@ const App = {
       }
     }
 
+    // Clear container
+    container.innerHTML = '';
+
     // Render each category group (only those with activity)
-    let html = '';
     for (const cat of categories) {
       const group = grouped[cat.id];
       // Only render categories that have websites with time
       if (group.totalSeconds > 0) {
-        html += this.renderCategoryGroup(group);
+        container.appendChild(this.renderCategoryGroup(group));
       }
     }
     // Add uncategorized if has websites
     if (grouped['uncategorized'].totalSeconds > 0) {
-      html += this.renderCategoryGroup(grouped['uncategorized']);
+      container.appendChild(this.renderCategoryGroup(grouped['uncategorized']));
     }
-
-    container.innerHTML = html;
 
     // Bind click events for detail view
     container.querySelectorAll('.website-card').forEach(card => {
@@ -791,32 +1190,65 @@ const App = {
     });
   },
 
-  // Render a single category group
+  // Render a single category group - returns DOM element
   renderCategoryGroup(group) {
     const { category, websites, totalSeconds } = group;
 
-    let html = `
-      <div class="category-group">
-        <div class="category-group-header">
-          <span class="category-color-bar" style="background: ${category.color}"></span>
-          <span class="category-group-name">${category.name}</span>
-          <span class="category-group-time">${Websites.formatTime(totalSeconds)}</span>
-        </div>
-        <div class="category-websites">
-    `;
+    const groupEl = document.createElement('div');
+    groupEl.className = 'category-group';
+
+    const header = document.createElement('div');
+    header.className = 'category-group-header';
+
+    const colorBar = document.createElement('span');
+    colorBar.className = 'category-color-bar';
+    colorBar.style.background = category.color;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'category-group-name';
+    nameSpan.textContent = category.name;
+
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'category-group-time';
+    timeSpan.textContent = Websites.formatTime(totalSeconds);
+
+    header.appendChild(colorBar);
+    header.appendChild(nameSpan);
+    header.appendChild(timeSpan);
+    groupEl.appendChild(header);
+
+    const websitesEl = document.createElement('div');
+    websitesEl.className = 'category-websites';
 
     for (const website of websites) {
-      html += `
-        <div class="website-card" data-domain="${website.domain}">
-          <img class="website-card-favicon" src="${website.favicon}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23666%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/></svg>'">
-          <span class="website-card-domain">${this.truncateDomain(website.displayName)}</span>
-          <span class="website-card-time">${Websites.formatTime(website.totalSeconds)}</span>
-        </div>
-      `;
+      const card = document.createElement('div');
+      card.className = 'website-card';
+      card.dataset.domain = website.domain;
+
+      const favicon = document.createElement('img');
+      favicon.className = 'website-card-favicon';
+      favicon.src = website.favicon;
+      favicon.alt = '';
+      favicon.onerror = function() {
+        this.src = 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%23666%22><circle cx=%2212%22 cy=%2212%22 r=%2210%22/></svg>';
+      };
+
+      const domainSpan = document.createElement('span');
+      domainSpan.className = 'website-card-domain';
+      domainSpan.textContent = this.truncateDomain(website.displayName);
+
+      const cardTimeSpan = document.createElement('span');
+      cardTimeSpan.className = 'website-card-time';
+      cardTimeSpan.textContent = Websites.formatTime(website.totalSeconds);
+
+      card.appendChild(favicon);
+      card.appendChild(domainSpan);
+      card.appendChild(cardTimeSpan);
+      websitesEl.appendChild(card);
     }
 
-    html += `</div></div>`;
-    return html;
+    groupEl.appendChild(websitesEl);
+    return groupEl;
   },
 
   // Truncate domain for card display
@@ -917,6 +1349,96 @@ const App = {
       await this.renderWebsites();
       Toast.success(seconds ? `Time limit set: ${minutes} minutes/day` : 'Time limit removed');
     });
+
+    // Edit habit type change
+    document.getElementById('editHabitType').addEventListener('change', (e) => {
+      const targetGroup = document.getElementById('editTargetGroup');
+      const hint = document.getElementById('editHabitTypeHint');
+      const isCount = e.target.value === 'count';
+      targetGroup.style.display = isCount ? 'block' : 'none';
+      hint.textContent = isCount
+        ? 'Set a daily goal to reach (e.g., 8 glasses of water)'
+        : 'Check off when completed';
+    });
+
+    // Cancel edit habit
+    document.getElementById('cancelEditHabitBtn').addEventListener('click', () => {
+      this.closeModal('editHabitModal');
+      document.getElementById('editHabitForm').reset();
+      this.openModal('settingsModal');
+    });
+
+    // Edit habit form submit
+    document.getElementById('editHabitForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await this.saveEditedHabit();
+    });
+  },
+
+  // Open edit habit modal with pre-filled data
+  async openEditHabitModal(habitId) {
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    // Fill form with current values
+    document.getElementById('editHabitId').value = habit.id;
+    document.getElementById('editHabitName').value = habit.name;
+    document.getElementById('editHabitType').value = habit.type;
+    document.getElementById('editHabitTarget').value = habit.target || 1;
+
+    // Update UI based on type
+    const targetGroup = document.getElementById('editTargetGroup');
+    const hint = document.getElementById('editHabitTypeHint');
+    const isCount = habit.type === 'count';
+    targetGroup.style.display = isCount ? 'block' : 'none';
+    hint.textContent = isCount
+      ? 'Set a daily goal to reach (e.g., 8 glasses of water)'
+      : 'Check off when completed';
+
+    this.openModal('editHabitModal');
+  },
+
+  // Save edited habit
+  async saveEditedHabit() {
+    const habitId = document.getElementById('editHabitId').value;
+    const name = document.getElementById('editHabitName').value.trim();
+    const type = document.getElementById('editHabitType').value;
+    const target = parseInt(document.getElementById('editHabitTarget').value) || 1;
+
+    if (!name) {
+      Toast.error('Habit name is required');
+      return;
+    }
+
+    const habits = await Storage.getHabits();
+    const habitIndex = habits.findIndex(h => h.id === habitId);
+    if (habitIndex === -1) {
+      Toast.error('Habit not found');
+      return;
+    }
+
+    // Update habit (preserve createdAt)
+    const updatedHabit = {
+      ...habits[habitIndex],
+      name: name,
+      type: type,
+      target: type === 'binary' ? 1 : Math.max(1, target)
+    };
+
+    try {
+      await Storage.saveHabit(updatedHabit);
+
+      this.closeModal('editHabitModal');
+      document.getElementById('editHabitForm').reset();
+
+      await this.renderHabits();
+      await this.renderStreaks();
+      await this.updateHabitCounter();
+      Toast.success('Habit updated');
+    } catch (error) {
+      Toast.error('Failed to update habit: ' + error.message);
+    }
   }
 };
 

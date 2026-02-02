@@ -4,10 +4,11 @@ const Storage = {
   // Get all data from storage
   async getData() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['habits', 'entries'], (result) => {
+      chrome.storage.local.get(['habits', 'entries', 'streakFreezes'], (result) => {
         resolve({
           habits: result.habits || [],
-          entries: result.entries || {}
+          entries: result.entries || {},
+          streakFreezes: result.streakFreezes || {} // { habitId: ['YYYY-MM-DD', ...] }
         });
       });
     });
@@ -122,6 +123,23 @@ const Storage = {
     return JSON.stringify(data, null, 2);
   },
 
+  // Sanitize a string to prevent XSS (strips HTML tags and control chars)
+  sanitizeString(str) {
+    if (typeof str !== 'string') return '';
+    // Remove HTML tags, control characters, and trim
+    return str
+      .replace(/<[^>]*>/g, '')
+      .replace(/[\x00-\x1F\x7F]/g, '')
+      .trim()
+      .substring(0, 200); // Limit length
+  },
+
+  // Validate date format YYYY-MM-DD
+  isValidDateString(str) {
+    if (typeof str !== 'string') return false;
+    return /^\d{4}-\d{2}-\d{2}$/.test(str);
+  },
+
   // Import data from JSON
   async importData(jsonString) {
     try {
@@ -131,11 +149,12 @@ const Storage = {
       if (!Array.isArray(data.habits)) {
         throw new Error('Invalid data: habits must be an array');
       }
-      if (typeof data.entries !== 'object') {
+      if (typeof data.entries !== 'object' || data.entries === null) {
         throw new Error('Invalid data: entries must be an object');
       }
 
-      // Validate habits
+      // Validate and sanitize habits
+      const sanitizedHabits = [];
       for (const habit of data.habits) {
         if (!habit.id || !habit.name || !habit.type) {
           throw new Error('Invalid habit structure');
@@ -143,12 +162,50 @@ const Storage = {
         if (!['binary', 'count'].includes(habit.type)) {
           throw new Error('Invalid habit type');
         }
+
+        // Sanitize string fields
+        sanitizedHabits.push({
+          id: this.sanitizeString(habit.id),
+          name: this.sanitizeString(habit.name),
+          type: habit.type,
+          target: typeof habit.target === 'number' ? Math.max(1, Math.floor(habit.target)) : 1,
+          createdAt: this.isValidDateString(habit.createdAt) ? habit.createdAt : this.formatDate(new Date())
+        });
+      }
+
+      // Validate and sanitize entries
+      const sanitizedEntries = {};
+      for (const [dateKey, dayEntries] of Object.entries(data.entries)) {
+        // Validate date key format
+        if (!this.isValidDateString(dateKey)) continue;
+
+        if (typeof dayEntries !== 'object' || dayEntries === null) continue;
+
+        sanitizedEntries[dateKey] = {};
+        for (const [habitId, entry] of Object.entries(dayEntries)) {
+          // Validate habitId exists in habits
+          const sanitizedHabitId = this.sanitizeString(habitId);
+          if (!sanitizedHabits.some(h => h.id === sanitizedHabitId)) continue;
+
+          // Validate entry structure
+          if (typeof entry !== 'object' || entry === null) continue;
+
+          sanitizedEntries[dateKey][sanitizedHabitId] = {
+            completed: Boolean(entry.completed),
+            value: typeof entry.value === 'number' ? Math.max(0, Math.floor(entry.value)) : 0
+          };
+        }
+
+        // Remove empty date entries
+        if (Object.keys(sanitizedEntries[dateKey]).length === 0) {
+          delete sanitizedEntries[dateKey];
+        }
       }
 
       return new Promise((resolve) => {
         chrome.storage.local.set({
-          habits: data.habits,
-          entries: data.entries
+          habits: sanitizedHabits,
+          entries: sanitizedEntries
         }, () => resolve(true));
       });
     } catch (error) {
@@ -282,5 +339,48 @@ const Storage = {
     return new Promise((resolve) => {
       chrome.storage.local.set({ websiteEntries: allEntries }, resolve);
     });
+  },
+
+  // ============== Streak Freeze Methods ==============
+
+  // Get streak freezes for all habits
+  async getStreakFreezes() {
+    const data = await this.getData();
+    return data.streakFreezes;
+  },
+
+  // Add a streak freeze for a habit on a specific date
+  async addStreakFreeze(habitId, date) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['streakFreezes'], (result) => {
+        const freezes = result.streakFreezes || {};
+        if (!freezes[habitId]) {
+          freezes[habitId] = [];
+        }
+        if (!freezes[habitId].includes(date)) {
+          freezes[habitId].push(date);
+        }
+        chrome.storage.local.set({ streakFreezes: freezes }, resolve);
+      });
+    });
+  },
+
+  // Remove a streak freeze
+  async removeStreakFreeze(habitId, date) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['streakFreezes'], (result) => {
+        const freezes = result.streakFreezes || {};
+        if (freezes[habitId]) {
+          freezes[habitId] = freezes[habitId].filter(d => d !== date);
+        }
+        chrome.storage.local.set({ streakFreezes: freezes }, resolve);
+      });
+    });
+  },
+
+  // Check if a date has a streak freeze for a habit
+  async hasStreakFreeze(habitId, date) {
+    const freezes = await this.getStreakFreezes();
+    return freezes[habitId]?.includes(date) || false;
   }
 };
