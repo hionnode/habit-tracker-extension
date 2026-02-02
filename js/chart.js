@@ -1,7 +1,7 @@
 // SVG Year Chart rendering
 
 const Chart = {
-  cellSize: 16,
+  cellSize: 18,
   cellGap: 2,
 
   // Create SVG pattern definitions for colorblind accessibility
@@ -360,6 +360,203 @@ const Chart = {
       rect.addEventListener('click', () => {
         if (onDayClick) onDayClick(dateStr);
       });
+
+      svg.appendChild(rect);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    container.innerHTML = '';
+    container.appendChild(svg);
+  },
+
+// Horizontal year chart settings (full year, 53 weeks x 7 days laid out horizontally)
+  horizontalYearCellSize: 8,
+  horizontalYearCellGap: 1,
+
+  // Render a horizontal full-year chart for a single habit (weeks as columns, days as rows)
+  async renderHorizontalYearChart(container, habitId) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31);
+    const todayStr = Storage.formatDate(today);
+
+    // Get habit data
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const entries = await Storage.getAllEntries();
+
+    // Horizontal layout: 53 columns (weeks) x 7 rows (days)
+    const cols = 53;
+    const rows = 7;
+    const cellSize = this.horizontalYearCellSize;
+    const gap = this.horizontalYearCellGap;
+    const width = cols * (cellSize + gap);
+    const height = rows * (cellSize + gap);
+
+    // Create SVG with viewBox for responsive scaling
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+    svg.setAttribute('class', 'horizontal-year-chart');
+
+    // Draw cells for each day
+    let currentDate = new Date(startOfYear);
+
+    while (currentDate <= endOfYear) {
+      const dateStr = Storage.formatDate(currentDate);
+      const dayOfYear = this.getDayOfYear(currentDate);
+      const dayOfWeek = currentDate.getDay(); // 0 = Sunday (row)
+      const weekOfYear = Math.floor((dayOfYear - 1 + startOfYear.getDay()) / 7); // column
+
+      // Horizontal: x is week, y is day of week
+      const x = weekOfYear * (cellSize + gap);
+      const y = dayOfWeek * (cellSize + gap);
+
+      const isFuture = currentDate > today;
+      const isToday = dateStr === todayStr;
+      const isBeforeHabit = dateStr < habit.createdAt;
+
+      let color;
+      if (isFuture || isBeforeHabit) {
+        color = '#2a2a2a';
+      } else {
+        const entry = entries[dateStr]?.[habitId];
+        const completed = Habits.isCompleted(entry, habit);
+        color = completed ? '#50c878' : '#ff4444';
+      }
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', cellSize);
+      rect.setAttribute('height', cellSize);
+      rect.setAttribute('rx', 2);
+      rect.setAttribute('fill', color);
+      rect.setAttribute('data-date', dateStr);
+
+      if (isToday) {
+        rect.setAttribute('stroke', '#fff');
+        rect.setAttribute('stroke-width', '1.5');
+      }
+
+      // Tooltip
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      if (isFuture) {
+        title.textContent = `${dateStr}: Future`;
+      } else if (isBeforeHabit) {
+        title.textContent = `${dateStr}: Before habit created`;
+      } else {
+        const entry = entries[dateStr]?.[habitId];
+        const completed = Habits.isCompleted(entry, habit);
+        title.textContent = `${dateStr}: ${completed ? 'Completed' : 'Missed'}`;
+      }
+      rect.appendChild(title);
+
+      svg.appendChild(rect);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    container.innerHTML = '';
+    container.appendChild(svg);
+  },
+
+  // Legacy: Horizontal mini chart (kept for compatibility)
+  horizontalCellWidth: 2,
+  horizontalCellHeight: 12,
+  horizontalCellGap: 1,
+
+  async renderHorizontalMiniChart(container, habitId, days = 180) {
+    // Redirect to the new horizontal year chart
+    return this.renderHorizontalYearChart(container, habitId);
+  },
+
+  // Render a larger year chart for habit detail modal
+  async renderHabitYearChart(container, habitId, onDayClick) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31);
+
+    // Use slightly larger cells for modal view
+    const cellSize = 14;
+    const cellGap = 2;
+
+    // Calculate dimensions for vertical layout
+    const cols = 7;
+    const rows = 53;
+    const width = cols * (cellSize + cellGap);
+    const height = rows * (cellSize + cellGap);
+
+    // Create SVG
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    svg.setAttribute('class', 'habit-year-chart');
+
+    // Get completion data for this habit
+    const completionData = await this.getHabitYearCompletion(habitId, year);
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+
+    // Draw cells for each day
+    let currentDate = new Date(startOfYear);
+    const todayStr = Storage.formatDate(today);
+
+    while (currentDate <= endOfYear) {
+      const dateStr = Storage.formatDate(currentDate);
+      const dayOfYear = this.getDayOfYear(currentDate);
+      const dayOfWeek = currentDate.getDay();
+      const weekOfYear = Math.floor((dayOfYear - 1 + startOfYear.getDay()) / 7);
+
+      const x = dayOfWeek * (cellSize + cellGap);
+      const y = weekOfYear * (cellSize + cellGap);
+
+      const isFuture = currentDate > today;
+      const isToday = dateStr === todayStr;
+      const isBeforeHabit = habit && dateStr < habit.createdAt;
+      const completed = completionData[dateStr];
+
+      let color;
+      if (isFuture || isBeforeHabit) {
+        color = '#2a2a2a';
+      } else {
+        color = completed ? '#50c878' : '#ff4444';
+      }
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', cellSize);
+      rect.setAttribute('height', cellSize);
+      rect.setAttribute('rx', 2);
+      rect.setAttribute('fill', color);
+      rect.setAttribute('data-date', dateStr);
+      rect.setAttribute('class', `habit-chart-cell${isToday ? ' today' : ''}`);
+
+      // Tooltip
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      if (isFuture) {
+        title.textContent = `${dateStr}: Future`;
+      } else if (isBeforeHabit) {
+        title.textContent = `${dateStr}: Before habit created`;
+      } else {
+        title.textContent = `${dateStr}: ${completed ? 'Completed' : 'Missed'}`;
+      }
+      rect.appendChild(title);
+
+      // Click handler
+      if (onDayClick) {
+        rect.style.cursor = 'pointer';
+        rect.addEventListener('click', () => onDayClick(dateStr));
+      }
 
       svg.appendChild(rect);
       currentDate.setDate(currentDate.getDate() + 1);

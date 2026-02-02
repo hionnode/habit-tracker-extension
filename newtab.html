@@ -8,19 +8,19 @@
 </head>
 <body>
   <main class="container" role="main">
-    <!-- Left Column: Vertical Year Chart + Days Remaining -->
-    <aside class="column column-left" aria-label="Year overview">
+    <!-- Left Panel: Year Chart -->
+    <aside class="panel panel-left" aria-label="Year overview">
       <div class="chart-container" id="chartContainer"></div>
+      <div class="selected-day-details" id="selectedDayDetails"></div>
+    </aside>
+
+    <!-- Center Panel: Today's Focus -->
+    <section class="panel panel-center" aria-label="Daily tracking">
       <div class="days-remaining">
         <span class="days-count" id="daysCount">0</span>
         <span class="days-label" id="daysLabel">days left in 2026</span>
       </div>
-      <div class="selected-day-details" id="selectedDayDetails"></div>
-    </aside>
 
-    <!-- Center Column: Habits + Websites -->
-    <section class="column column-center" aria-label="Daily tracking">
-      <!-- Habits Section -->
       <div class="section-habits">
         <h2 class="today-title">Today's Habits</h2>
         <div class="habits-list" id="habitsList"></div>
@@ -30,19 +30,21 @@
         </div>
       </div>
 
-      <!-- Websites Section -->
       <div class="section-websites">
-        <div class="websites-header">
+        <button class="websites-header collapsible-header" id="websitesToggle" aria-expanded="true">
           <h2 class="section-title">Website Usage</h2>
-          <span class="websites-total-time" id="websitesTotalTime">0m</span>
-        </div>
-        <div class="category-groups" id="categoryGroups"></div>
+          <span class="websites-header-right">
+            <span class="websites-total-time" id="websitesTotalTime">0m</span>
+            <span class="collapse-icon"></span>
+          </span>
+        </button>
+        <div class="category-groups collapsible-content expanded" id="categoryGroups"></div>
       </div>
     </section>
 
-    <!-- Right Column: Streaks -->
-    <aside class="column column-right" aria-label="Habit streaks">
-      <h2 class="streaks-title">Streaks</h2>
+    <!-- Right Panel: Streaks with Year Views -->
+    <aside class="panel panel-right" aria-label="Habit streaks">
+      <h2 class="streaks-title">Habit Progress</h2>
       <div class="streaks-list" id="streaksList"></div>
     </aside>
   </main>
@@ -122,6 +124,14 @@
         <label>Category:</label>
         <select id="detailCategorySelect"></select>
       </div>
+      <div class="website-detail-limit">
+        <label for="timeLimitInput">Daily Time Limit</label>
+        <div class="limit-input-group">
+          <input type="number" id="timeLimitInput" min="0" max="1440" placeholder="No limit" class="limit-input">
+          <span class="limit-unit">minutes</span>
+        </div>
+        <span class="remaining-time" id="remainingTime"></span>
+      </div>
       <div class="website-detail-trends">
         <div class="trend-section">
           <h4>Last 7 Days</h4>
@@ -134,6 +144,35 @@
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-cancel" id="closeDetailBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+<!-- Habit Detail Modal -->
+  <div class="modal" id="habitDetailModal">
+    <div class="modal-content habit-detail-content">
+      <div class="habit-detail-header">
+        <h3 id="habitDetailName">Habit Name</h3>
+        <button type="button" class="modal-close-btn" id="closeHabitDetailBtn">&times;</button>
+      </div>
+      <div class="habit-detail-chart-container" id="habitDetailYearChart"></div>
+      <div class="habit-detail-stats">
+        <div class="habit-stat">
+          <span class="habit-stat-label">Current streak</span>
+          <span class="habit-stat-value"><span class="streak-fire">🔥</span> <span id="habitDetailCurrentStreak">0</span> days</span>
+        </div>
+        <div class="habit-stat">
+          <span class="habit-stat-label">Best streak</span>
+          <span class="habit-stat-value"><span class="streak-fire">🔥</span> <span id="habitDetailBestStreak">0</span> days</span>
+        </div>
+        <div class="habit-stat">
+          <span class="habit-stat-label">Completion rate</span>
+          <span class="habit-stat-value" id="habitDetailCompletionRate">0%</span>
+        </div>
+        <div class="habit-stat">
+          <span class="habit-stat-label">Created</span>
+          <span class="habit-stat-value" id="habitDetailCreatedAt">-</span>
+        </div>
       </div>
     </div>
   </div>
@@ -159,6 +198,9 @@
     </div>
   </div>
 
+  <!-- Confetti Canvas -->
+  <canvas id="confettiCanvas"></canvas>
+
   <script src="js/storage.js"></script>
   <script src="js/habits.js"></script>
   <script src="js/chart.js"></script>
@@ -166,6 +208,7 @@
   <script src="js/website-chart.js"></script>
   <script src="js/a11y.js"></script>
   <script src="js/toast.js"></script>
+  <script src="js/confetti.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

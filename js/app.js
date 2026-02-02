@@ -8,6 +8,7 @@ const App = {
     this.selectedDate = Storage.formatDate(new Date());
 
     await this.renderDaysRemaining();
+    this.renderTodayTitle();
     await this.renderChart();
     await this.renderHabits();
     await this.renderStreaks();
@@ -16,16 +17,38 @@ const App = {
     this.bindEvents();
   },
 
-  // Render days remaining in the year
+  // Render today's date as the title
+  renderTodayTitle() {
+    const title = document.querySelector('.today-title');
+    if (!title) return;
+
+    const today = new Date();
+    const options = { weekday: 'long', month: 'short', day: 'numeric' };
+    title.textContent = today.toLocaleDateString('en-US', options);
+  },
+
+  // Render day of the year (progress-framed instead of loss-framed)
   async renderDaysRemaining() {
     const today = new Date();
     const year = today.getFullYear();
-    const endOfYear = new Date(year, 11, 31);
-    const diff = endOfYear - today;
-    const daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    const startOfYear = new Date(year, 0, 1);
+    const diff = today - startOfYear;
+    const dayOfYear = Math.ceil(diff / (1000 * 60 * 60 * 24));
 
-    document.getElementById('daysCount').textContent = daysRemaining;
-    document.getElementById('daysLabel').textContent = `days left in ${year}`;
+    // Rotating encouraging subtitles
+    const subtitles = [
+      "Make it count",
+      "You're building momentum",
+      "Every day matters",
+      "Keep showing up",
+      "Progress over perfection",
+      "Small steps, big results",
+      "Today is your opportunity"
+    ];
+    const subtitleIndex = dayOfYear % subtitles.length;
+
+    document.getElementById('daysCount').textContent = `Day ${dayOfYear}`;
+    document.getElementById('daysLabel').textContent = subtitles[subtitleIndex];
   },
 
   // Render the year chart
@@ -55,10 +78,19 @@ const App = {
 
     const dayEntries = entries[this.selectedDate] || {};
 
+    // Calculate streaks for all habits (only for today view)
+    const streaks = {};
+    if (isToday) {
+      for (const habit of habits) {
+        streaks[habit.id] = await Habits.calculateStreak(habit.id);
+      }
+    }
+
     let html = '';
     for (const habit of habits) {
       const entry = dayEntries[habit.id] || { completed: false, value: 0 };
       const isCompleted = Habits.isCompleted(entry, habit);
+      const streak = streaks[habit.id] || 0;
 
       html += `<div class="habit-item ${isCompleted ? 'completed' : ''}">`;
 
@@ -111,62 +143,122 @@ const App = {
     this.bindHabitEvents();
   },
 
-  // Render streaks in the right column with compact list
+// Render streaks in the right panel with horizontal year charts
   async renderStreaks() {
     const habits = await Storage.getHabits();
     const container = document.getElementById('streaksList');
 
     if (habits.length === 0) {
-      container.innerHTML = '<div class="no-streaks">Add habits to track streaks</div>';
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📊</div>
+          <div class="empty-state-title">No habits yet</div>
+          <div class="empty-state-text">Add habits to see your yearly progress here</div>
+        </div>
+      `;
       return;
     }
 
-    // Calculate all streaks
+    // Calculate all streaks and stats
     const streaks = [];
-    let bestStreak = 0;
+    let overallBestStreak = 0;
+    let totalCompleted = 0;
     for (const habit of habits) {
       const streak = await Habits.calculateStreak(habit.id);
-      streaks.push({ habit, streak });
-      if (streak > bestStreak) bestStreak = streak;
+      const bestStreak = await Habits.calculateBestStreak(habit.id);
+      const stats = await Habits.getCompletionStats(habit.id);
+      streaks.push({ habit, streak, bestStreak, stats });
+      if (bestStreak > overallBestStreak) overallBestStreak = bestStreak;
+      totalCompleted += stats.completedDays;
     }
 
-    // Build compact streak list
-    let html = '<div class="streak-list-compact">';
-    for (const { habit, streak } of streaks) {
+    // Build streak list with horizontal year charts
+    let html = '<div class="streak-list-with-charts">';
+    for (const { habit, streak, stats } of streaks) {
+      const completionPercent = Math.round(stats.completionRate * 100);
       html += `
-        <div class="streak-row">
-          <span class="streak-row-name">${habit.name}</span>
-          <span class="streak-row-value"><span class="streak-fire">🔥</span> ${streak}</span>
+        <div class="streak-row-with-chart" data-habit-id="${habit.id}">
+          <div class="streak-row-header">
+            <span class="streak-row-name">${habit.name}</span>
+            <span class="streak-row-stats">
+              <span class="streak-completion">${completionPercent}%</span>
+              <span class="streak-row-value"><span class="streak-fire">🔥</span> ${streak}</span>
+            </span>
+          </div>
+          <div class="streak-horizontal-chart" id="horizontalChart-${habit.id}"></div>
         </div>
       `;
     }
     html += '</div>';
 
-    // Add combined mini chart
-    html += '<div class="combined-chart-container" id="combinedMiniChart"></div>';
-
     // Add summary
     html += `
       <div class="streaks-summary">
         <div class="summary-item">
-          <span class="summary-label">Best streak</span>
-          <span class="summary-value">${bestStreak} day${bestStreak !== 1 ? 's' : ''}</span>
+          <span class="summary-label">Best streak (all habits)</span>
+          <span class="summary-value">${overallBestStreak} day${overallBestStreak !== 1 ? 's' : ''}</span>
         </div>
         <div class="summary-item">
-          <span class="summary-label">Total habits</span>
-          <span class="summary-value">${habits.length}</span>
+          <span class="summary-label">Total completions</span>
+          <span class="summary-value">${totalCompleted}</span>
         </div>
       </div>
     `;
 
     container.innerHTML = html;
 
-    // Render combined mini chart (overall completion)
-    const chartContainer = document.getElementById('combinedMiniChart');
-    if (chartContainer) {
-      await Chart.renderCombinedMiniChart(chartContainer, (dateStr) => this.selectDate(dateStr));
+    // Render horizontal year charts for each habit
+    for (const { habit } of streaks) {
+      const chartContainer = document.getElementById(`horizontalChart-${habit.id}`);
+      if (chartContainer) {
+        await Chart.renderHorizontalYearChart(chartContainer, habit.id);
+      }
     }
+
+    // Bind click events for habit detail
+    container.querySelectorAll('.streak-row-with-chart').forEach(row => {
+      row.addEventListener('click', () => {
+        const habitId = row.dataset.habitId;
+        this.showHabitDetail(habitId);
+      });
+    });
   },
+
+  // Show habit detail modal with year view
+  async showHabitDetail(habitId) {
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    const currentStreak = await Habits.calculateStreak(habitId);
+    const bestStreak = await Habits.calculateBestStreak(habitId);
+    const stats = await Habits.getCompletionStats(habitId);
+
+    // Format creation date
+    const createdDate = new Date(habit.createdAt);
+    const formattedDate = createdDate.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    // Populate modal content
+    document.getElementById('habitDetailName').textContent = habit.name;
+    document.getElementById('habitDetailCurrentStreak').textContent = currentStreak;
+    document.getElementById('habitDetailBestStreak').textContent = bestStreak;
+    document.getElementById('habitDetailCompletionRate').textContent = `${Math.round(stats.completionRate * 100)}%`;
+    document.getElementById('habitDetailCreatedAt').textContent = formattedDate;
+
+    // Render year chart
+    const chartContainer = document.getElementById('habitDetailYearChart');
+    await Chart.renderHabitYearChart(chartContainer, habitId);
+
+    // Show modal
+    this.openModal('habitDetailModal');
+  },
+
+  // Track if we've already celebrated today
+  _celebratedToday: false,
 
   // Update the habit counter display
   async updateHabitCounter() {
@@ -178,6 +270,7 @@ const App = {
     const addBtn = document.getElementById('addHabitBtn');
     const todayStr = Storage.formatDate(new Date());
     const dayEntries = entries[todayStr] || {};
+    const habitsListEl = document.getElementById('habitsList');
 
     // Count completed habits for today
     let completedToday = 0;
@@ -188,21 +281,72 @@ const App = {
       }
     }
 
+    const allComplete = count > 0 && completedToday === count;
+
     if (counterEl) {
-      if (count > 0 && completedToday === count) {
-        counterEl.textContent = `All ${count} habits today`;
+      if (allComplete) {
+        counterEl.textContent = `${count} of ${count} complete`;
         counterEl.classList.add('all-complete');
         counterEl.classList.remove('at-limit');
       } else {
-        counterEl.textContent = `${completedToday}/${count} habits today`;
+        counterEl.textContent = `${completedToday} of ${count} complete`;
         counterEl.classList.remove('all-complete');
         counterEl.classList.remove('at-limit');
+      }
+    }
+
+    // Trigger celebration when all habits are complete (only once per session)
+    if (allComplete && !this._celebratedToday && this.selectedDate === todayStr) {
+      this._celebratedToday = true;
+      this.triggerCelebration();
+    }
+
+    // Remove celebration message if not all complete
+    if (!allComplete) {
+      const existingMessage = document.querySelector('.celebration-message');
+      if (existingMessage) {
+        existingMessage.remove();
       }
     }
 
     if (addBtn) {
       addBtn.disabled = count >= max;
       addBtn.style.display = count >= max ? 'none' : 'block';
+    }
+  },
+
+  // Trigger celebration effects
+  triggerCelebration() {
+    const habitsListEl = document.getElementById('habitsList');
+    const addHabitSection = document.querySelector('.add-habit-section');
+
+    // Add glow animation
+    if (habitsListEl) {
+      habitsListEl.classList.add('celebrating');
+      setTimeout(() => {
+        habitsListEl.classList.remove('celebrating');
+      }, 1500);
+    }
+
+    // Trigger confetti
+    if (typeof Confetti !== 'undefined') {
+      Confetti.celebrate();
+    }
+
+    // Add celebration message
+    if (addHabitSection && !document.querySelector('.celebration-message')) {
+      const messages = [
+        "Perfect day! You're building something great.",
+        "All habits complete! Keep the momentum going.",
+        "Amazing! Every day like this shapes who you become.",
+        "You did it! Small wins lead to big transformations."
+      ];
+      const message = messages[Math.floor(Math.random() * messages.length)];
+
+      const messageEl = document.createElement('div');
+      messageEl.className = 'celebration-message';
+      messageEl.textContent = message;
+      addHabitSection.insertAdjacentElement('beforebegin', messageEl);
     }
   },
 
@@ -213,9 +357,12 @@ const App = {
     const title = document.querySelector('.today-title');
 
     if (dateStr === todayStr) {
-      title.textContent = "Today's Habits";
+      this.renderTodayTitle();
     } else {
-      title.textContent = dateStr;
+      // Format the selected date nicely
+      const selectedDate = new Date(dateStr + 'T00:00:00');
+      const options = { weekday: 'long', month: 'short', day: 'numeric' };
+      title.textContent = selectedDate.toLocaleDateString('en-US', options);
     }
 
     // Update selected cell styling
@@ -264,6 +411,7 @@ const App = {
         await this.renderChart();
         await this.renderHabits();
         await this.renderStreaks();
+        await this.updateHabitCounter();
       });
     });
 
@@ -283,6 +431,7 @@ const App = {
         await this.renderChart();
         await this.renderHabits();
         await this.renderStreaks();
+        await this.updateHabitCounter();
       });
     });
   },
@@ -300,11 +449,27 @@ const App = {
     A11y.closeModal(modal);
   },
 
-  // Bind global events
+// Bind global events
   bindEvents() {
+    // Website usage toggle (collapsible)
+    const websitesToggle = document.getElementById('websitesToggle');
+    const categoryGroups = document.getElementById('categoryGroups');
+    if (websitesToggle && categoryGroups) {
+      websitesToggle.addEventListener('click', () => {
+        const isExpanded = websitesToggle.getAttribute('aria-expanded') === 'true';
+        websitesToggle.setAttribute('aria-expanded', !isExpanded);
+        categoryGroups.classList.toggle('expanded', !isExpanded);
+      });
+    }
+
     // Close website detail modal
     document.getElementById('closeDetailBtn').addEventListener('click', () => {
       this.closeModal('websiteDetailModal');
+    });
+
+    // Close habit detail modal
+    document.getElementById('closeHabitDetailBtn').addEventListener('click', () => {
+      this.closeModal('habitDetailModal');
     });
 
     // Website category change in detail modal
@@ -689,6 +854,25 @@ const App = {
     }
     select.innerHTML = html;
 
+    // Populate time limit section
+    const settings = await Storage.getWebsiteSettings();
+    const currentLimit = settings[domain]?.dailyLimitSeconds || null;
+    const limitMinutes = currentLimit ? Math.floor(currentLimit / 60) : '';
+    document.getElementById('timeLimitInput').value = limitMinutes;
+
+    // Show remaining time
+    const remaining = await Websites.getRemainingTime(domain);
+    const remainingEl = document.getElementById('remainingTime');
+    if (remaining !== null) {
+      remainingEl.textContent = remaining > 0
+        ? `${Websites.formatTime(remaining)} remaining today`
+        : 'Limit reached - blocked';
+      remainingEl.classList.toggle('exceeded', remaining <= 0);
+    } else {
+      remainingEl.textContent = '';
+      remainingEl.classList.remove('exceeded');
+    }
+
     // Render trend charts
     const weeklyTrend = await Websites.getWeeklyTrend(domain);
     const monthlyTrend = await Websites.getMonthlyTrend(domain);
@@ -706,6 +890,32 @@ const App = {
       const categoryId = e.target.value || null;
       await Storage.setWebsiteSetting(this.selectedWebsiteDomain, { categoryId });
       await this.renderWebsites();
+    });
+
+    // Time limit input
+    document.getElementById('timeLimitInput').addEventListener('change', async (e) => {
+      const minutes = parseInt(e.target.value, 10);
+      const seconds = minutes > 0 ? minutes * 60 : null;
+
+      await Storage.setWebsiteSetting(this.selectedWebsiteDomain, {
+        dailyLimitSeconds: seconds
+      });
+
+      // Update remaining time display
+      const remaining = await Websites.getRemainingTime(this.selectedWebsiteDomain);
+      const remainingEl = document.getElementById('remainingTime');
+      if (remaining !== null) {
+        remainingEl.textContent = remaining > 0
+          ? `${Websites.formatTime(remaining)} remaining today`
+          : 'Limit reached - blocked';
+        remainingEl.classList.toggle('exceeded', remaining <= 0);
+      } else {
+        remainingEl.textContent = '';
+        remainingEl.classList.remove('exceeded');
+      }
+
+      await this.renderWebsites();
+      Toast.success(seconds ? `Time limit set: ${minutes} minutes/day` : 'Time limit removed');
     });
   }
 };

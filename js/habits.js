@@ -94,20 +94,98 @@ const Habits = {
   },
 
   // Get color based on completion rate
+  // Uses softer amber for missed days (growth-oriented) instead of harsh red (shame-based)
   getColor(completionRate, isFuture = false) {
     if (isFuture) {
       return '#2a2a2a'; // Grey for future
     }
 
     if (completionRate === 0) {
-      return '#ff4444'; // Red for 0%
+      return '#e07850'; // Softer amber/coral for 0% (growth-oriented, not shame-inducing)
     }
 
-    // Interpolate between red, yellow, and green
+    // Interpolate between amber, yellow, and green
     if (completionRate <= 0.5) {
-      return this.interpolateColor('#ff4444', '#ffcc00', completionRate * 2);
+      return this.interpolateColor('#e07850', '#ffcc00', completionRate * 2);
     }
     return this.interpolateColor('#ffcc00', '#50c878', (completionRate - 0.5) * 2);
+  },
+
+// Calculate best (longest) historical streak for a habit
+  async calculateBestStreak(habitId) {
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return 0;
+
+    const entries = await Storage.getAllEntries();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = Storage.formatDate(today);
+
+    // Start from habit creation date
+    const startDate = new Date(habit.createdAt);
+    startDate.setHours(0, 0, 0, 0);
+
+    let bestStreak = 0;
+    let currentStreak = 0;
+    let checkDate = new Date(startDate);
+
+    while (checkDate <= today) {
+      const dateStr = Storage.formatDate(checkDate);
+      const entry = entries[dateStr]?.[habitId];
+
+      if (this.isCompleted(entry, habit)) {
+        currentStreak++;
+        if (currentStreak > bestStreak) {
+          bestStreak = currentStreak;
+        }
+      } else {
+        currentStreak = 0;
+      }
+
+      checkDate.setDate(checkDate.getDate() + 1);
+    }
+
+    return bestStreak;
+  },
+
+  // Get completion statistics for a habit
+  async getCompletionStats(habitId) {
+    const habits = await Storage.getHabits();
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return { completionRate: 0, totalDays: 0, completedDays: 0 };
+
+    const entries = await Storage.getAllEntries();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Start from habit creation date
+    const startDate = new Date(habit.createdAt);
+    startDate.setHours(0, 0, 0, 0);
+
+    let totalDays = 0;
+    let completedDays = 0;
+    let checkDate = new Date(startDate);
+
+    while (checkDate <= today) {
+      const dateStr = Storage.formatDate(checkDate);
+      totalDays++;
+
+      const entry = entries[dateStr]?.[habitId];
+      if (this.isCompleted(entry, habit)) {
+        completedDays++;
+      }
+
+      checkDate.setDate(checkDate.getDate() + 1);
+    }
+
+    const completionRate = totalDays > 0 ? completedDays / totalDays : 0;
+
+    return {
+      completionRate,
+      totalDays,
+      completedDays
+    };
   },
 
   // Interpolate between two hex colors

@@ -221,5 +221,31 @@ const Websites = {
   // Generate a unique category ID
   generateCategoryId() {
     return 'cat-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+  },
+
+  // Get remaining time for a domain today (in seconds)
+  async getRemainingTime(domain) {
+    const settings = await Storage.getWebsiteSettings();
+    const limit = settings[domain]?.dailyLimitSeconds;
+
+    if (!limit) return null; // No limit set
+
+    const today = Storage.formatDate(new Date());
+    const entries = await Storage.getWebsiteEntries(today, today);
+    const used = entries[today]?.[domain]?.totalSeconds || 0;
+
+    return Math.max(0, limit - used);
+  },
+
+  // Check if domain is currently blocked (limit exceeded)
+  async isBlocked(domain) {
+    const remaining = await this.getRemainingTime(domain);
+    return remaining !== null && remaining <= 0;
+  },
+
+  // Format time limit for display (handles null)
+  formatTimeLimit(seconds) {
+    if (seconds === null || seconds === undefined) return 'No limit';
+    return this.formatTime(seconds);
   }
 };
