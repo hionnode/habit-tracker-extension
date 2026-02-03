@@ -4,9 +4,92 @@ const App = {
   selectedDate: null,
   selectedWebsiteDomain: null,
 
+  // Streak milestones with messages and tiers
+  MILESTONES: {
+    3: { message: "You've started! Most people never make it here", tier: 'bronze' },
+    7: { message: "One week strong! Real momentum building", tier: 'silver' },
+    21: { message: "Three weeks! Science says this is habit territory", tier: 'gold' },
+    30: { message: "A full month! You're becoming someone new", tier: 'gold' },
+    100: { message: "LEGENDARY! 100 days of dedication", tier: 'platinum' }
+  },
+
+  // Track acknowledged milestones (stored in session to not repeat)
+  acknowledgedMilestones: new Set(),
+
+  // Recovery messages for broken streaks
+  RECOVERY_MESSAGES: [
+    "Your {best}-day streak proves you can do this. Start fresh today.",
+    "You've done {best} days before. That strength is still in you.",
+    "Streaks end, but your progress doesn't. Day 1 again?",
+    "Every master was once a beginner. Your {best}-day best awaits you again."
+  ],
+
   // Helper to escape HTML for safe insertion (used only for static content with dynamic attributes)
   escapeAttr(str) {
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
+
+  // Get visual streak icon based on streak length
+  // 1-6: single flame, 7-29: double flame, 30-99: fire+star, 100+: crown
+  getStreakIcon(streak) {
+    if (streak >= 100) return '\u{1F451}'; // Crown
+    if (streak >= 30) return '\u{1F31F}';  // Star
+    if (streak >= 7) return '\u{1F525}\u{1F525}'; // Double flame
+    return '\u{1F525}'; // Single flame
+  },
+
+  // Check and celebrate milestone
+  async checkMilestone(habitId, streak) {
+    const milestoneKey = `${habitId}-${streak}`;
+    if (this.acknowledgedMilestones.has(milestoneKey)) return;
+
+    const milestone = this.MILESTONES[streak];
+    if (!milestone) return;
+
+    // Mark as acknowledged
+    this.acknowledgedMilestones.add(milestoneKey);
+
+    // Celebrate!
+    if (typeof Confetti !== 'undefined') {
+      Confetti.celebrate(milestone.tier);
+    }
+
+    if (typeof Animations !== 'undefined') {
+      const habitItem = document.querySelector(`[data-habit-id="${habitId}"]`)?.closest('.habit-item');
+      if (habitItem) {
+        Animations.streakMilestone(habitItem, milestone.tier, streak);
+      }
+    }
+
+    // Show milestone toast
+    if (typeof Toast !== 'undefined') {
+      Toast.success(milestone.message);
+    }
+  },
+
+  // Show recovery message for broken streaks
+  async showRecoveryMessage(habitId, currentStreak, bestStreak) {
+    if (currentStreak !== 0 || bestStreak < 7) return;
+
+    // Only show recovery message once per session per habit
+    const recoveryKey = `recovery-${habitId}`;
+    if (this.acknowledgedMilestones.has(recoveryKey)) return;
+    this.acknowledgedMilestones.add(recoveryKey);
+
+    const message = this.RECOVERY_MESSAGES[Math.floor(Math.random() * this.RECOVERY_MESSAGES.length)]
+      .replace('{best}', bestStreak);
+
+    // Show as a special recovery notification
+    const habitsListEl = document.getElementById('habitsList');
+    if (habitsListEl && !document.querySelector('.recovery-message')) {
+      const recoveryEl = document.createElement('div');
+      recoveryEl.className = 'recovery-message';
+      recoveryEl.textContent = message;
+      habitsListEl.parentNode.insertBefore(recoveryEl, habitsListEl);
+
+      // Auto-remove after 10 seconds
+      setTimeout(() => recoveryEl.remove(), 10000);
+    }
   },
 
   async init() {
@@ -14,12 +97,26 @@ const App = {
 
     await this.renderDaysRemaining();
     this.renderTodayTitle();
+
+    // Batch initial data fetch for better performance
+    const [habits, entries, freezes] = await Promise.all([
+      Storage.getHabits(),
+      Storage.getAllEntries(),
+      Storage.getStreakFreezes()
+    ]);
+
+    // Render with pre-fetched data
     await this.renderChart();
-    await this.renderHabits();
-    await this.renderStreaks();
-    await this.updateHabitCounter();
+    await this.renderHabitsWithData(habits, entries, freezes);
+    await this.renderStreaksWithData(habits, entries, freezes);
+    await this.updateHabitCounterWithData(habits, entries);
     await this.initWebsitesSection();
     this.bindEvents();
+
+    // Show onboarding for new users
+    if (typeof Onboarding !== 'undefined') {
+      await Onboarding.maybeStartOnboarding();
+    }
   },
 
   // Render today's date as the title
@@ -75,6 +172,11 @@ const App = {
   async renderHabits() {
     const habits = await Storage.getHabits();
     const entries = await Storage.getAllEntries();
+    return this.renderHabitsWithData(habits, entries);
+  },
+
+  // Render habits with pre-fetched data (for batched loading)
+  async renderHabitsWithData(habits, entries, freezes = null) {
     const container = document.getElementById('habitsList');
     const todayStr = Storage.formatDate(new Date());
     const isToday = this.selectedDate === todayStr;
@@ -207,11 +309,11 @@ const App = {
         nameSpan.textContent = habit.name;
         habitItem.appendChild(nameSpan);
 
-        // Add inline streak for today view
+        // Add inline streak for today view with visual level
         if (isToday && streak > 0) {
           const streakSpan = document.createElement('span');
           streakSpan.className = 'habit-inline-streak';
-          streakSpan.textContent = `\u{1F525}${streak}`;
+          streakSpan.textContent = `${this.getStreakIcon(streak)}${streak}`;
           habitItem.appendChild(streakSpan);
         }
       } else {
@@ -220,11 +322,11 @@ const App = {
         nameSpan.textContent = habit.name;
         habitItem.appendChild(nameSpan);
 
-        // Add inline streak for today view (before counter)
+        // Add inline streak for today view with visual level (before counter)
         if (isToday && streak > 0) {
           const streakSpan = document.createElement('span');
           streakSpan.className = 'habit-inline-streak';
-          streakSpan.textContent = `\u{1F525}${streak}`;
+          streakSpan.textContent = `${this.getStreakIcon(streak)}${streak}`;
           habitItem.appendChild(streakSpan);
         }
 
@@ -296,7 +398,16 @@ const App = {
 
 // Render streaks in the right panel with horizontal year charts
   async renderStreaks() {
-    const habits = await Storage.getHabits();
+    const [habits, entries, freezes] = await Promise.all([
+      Storage.getHabits(),
+      Storage.getAllEntries(),
+      Storage.getStreakFreezes()
+    ]);
+    return this.renderStreaksWithData(habits, entries, freezes);
+  },
+
+  // Render streaks with pre-fetched data (for batched loading)
+  async renderStreaksWithData(habits, entries, freezes) {
     const container = document.getElementById('streaksList');
 
     // Clear container
@@ -368,7 +479,7 @@ const App = {
 
       const fireSpan = document.createElement('span');
       fireSpan.className = 'streak-fire';
-      fireSpan.textContent = '\u{1F525}'; // fire emoji
+      fireSpan.textContent = this.getStreakIcon(streak);
 
       valueSpan.appendChild(fireSpan);
       valueSpan.appendChild(document.createTextNode(` ${streak}`));
@@ -527,6 +638,11 @@ const App = {
   async updateHabitCounter() {
     const habits = await Storage.getHabits();
     const entries = await Storage.getAllEntries();
+    return this.updateHabitCounterWithData(habits, entries);
+  },
+
+  // Update habit counter with pre-fetched data (for batched loading)
+  async updateHabitCounterWithData(habits, entries) {
     const count = habits.length;
     const max = Storage.MAX_HABITS;
     const counterEl = document.getElementById('habitCounter');
@@ -673,18 +789,30 @@ const App = {
     const container = document.getElementById('selectedDayDetails');
     const todayStr = Storage.formatDate(new Date());
 
+    // Clear container safely
+    container.innerHTML = '';
+
     if (dateStr === todayStr) {
-      container.innerHTML = '';
       return;
     }
 
     const rate = await Habits.getCompletionRate(dateStr);
-    container.innerHTML = `
-      <div class="day-details">
-        <span class="day-details-date">${dateStr}</span>
-        <span class="day-details-rate">${Math.round(rate * 100)}% completed</span>
-      </div>
-    `;
+
+    // Build DOM safely to prevent XSS
+    const details = document.createElement('div');
+    details.className = 'day-details';
+
+    const dateSpan = document.createElement('span');
+    dateSpan.className = 'day-details-date';
+    dateSpan.textContent = dateStr;
+
+    const rateSpan = document.createElement('span');
+    rateSpan.className = 'day-details-rate';
+    rateSpan.textContent = `${Math.round(rate * 100)}% completed`;
+
+    details.appendChild(dateSpan);
+    details.appendChild(rateSpan);
+    container.appendChild(details);
   },
 
   // Bind habit-specific events
@@ -712,9 +840,18 @@ const App = {
         if (shouldPulse) {
           const newHabitItem = document.querySelector(`[data-habit-id="${habitId}"]`)?.closest('.habit-item');
           if (newHabitItem) {
-            newHabitItem.classList.add('success-pulse');
-            setTimeout(() => newHabitItem.classList.remove('success-pulse'), 600);
+            // Variable reward - 20% chance of enhanced feedback
+            if (typeof Animations !== 'undefined' && Animations.maybeVariableReward()) {
+              Animations.enhancedCompletion(newHabitItem);
+            } else {
+              newHabitItem.classList.add('success-pulse');
+              setTimeout(() => newHabitItem.classList.remove('success-pulse'), 600);
+            }
           }
+
+          // Check for milestone
+          const streak = await Habits.calculateStreak(habitId);
+          await this.checkMilestone(habitId, streak);
         }
       });
     });
@@ -751,9 +888,18 @@ const App = {
         if (shouldPulse) {
           const newHabitItem = document.querySelector(`[data-habit-id="${habitId}"]`)?.closest('.habit-item');
           if (newHabitItem) {
-            newHabitItem.classList.add('success-pulse');
-            setTimeout(() => newHabitItem.classList.remove('success-pulse'), 600);
+            // Variable reward - 20% chance of enhanced feedback
+            if (typeof Animations !== 'undefined' && Animations.maybeVariableReward()) {
+              Animations.enhancedCompletion(newHabitItem);
+            } else {
+              newHabitItem.classList.add('success-pulse');
+              setTimeout(() => newHabitItem.classList.remove('success-pulse'), 600);
+            }
           }
+
+          // Check for milestone
+          const streak = await Habits.calculateStreak(habitId);
+          await this.checkMilestone(habitId, streak);
         }
       });
     });
@@ -1274,17 +1420,30 @@ const App = {
     document.getElementById('detailDomain').textContent = domain;
     document.getElementById('detailTodayTime').textContent = Websites.formatTime(website?.totalSeconds || 0);
 
-    // Populate category select
+    // Populate category select (using safe DOM methods to prevent XSS)
     const categories = await Storage.getWebsiteCategories();
     const currentCategoryId = await Websites.getCategoryForDomain(domain);
     const select = document.getElementById('detailCategorySelect');
 
-    let html = '<option value="">Uncategorized</option>';
+    // Clear existing options
+    select.innerHTML = '';
+
+    // Add uncategorized option
+    const uncategorizedOption = document.createElement('option');
+    uncategorizedOption.value = '';
+    uncategorizedOption.textContent = 'Uncategorized';
+    select.appendChild(uncategorizedOption);
+
+    // Add category options using safe DOM methods
     for (const category of categories) {
-      const selected = category.id === currentCategoryId ? 'selected' : '';
-      html += `<option value="${category.id}" ${selected}>${category.name}</option>`;
+      const option = document.createElement('option');
+      option.value = category.id;
+      option.textContent = category.name;
+      if (category.id === currentCategoryId) {
+        option.selected = true;
+      }
+      select.appendChild(option);
     }
-    select.innerHTML = html;
 
     // Populate time limit section
     const settings = await Storage.getWebsiteSettings();
@@ -1399,6 +1558,13 @@ const App = {
     this.openModal('editHabitModal');
   },
 
+  // Show keyboard shortcuts help
+  showKeyboardShortcutsHelp() {
+    if (typeof Toast !== 'undefined') {
+      Toast.info('Shortcuts: 1-5 toggle habits, j/k navigate, n new habit, Esc close');
+    }
+  },
+
   // Save edited habit
   async saveEditedHabit() {
     const habitId = document.getElementById('editHabitId').value;
@@ -1441,6 +1607,87 @@ const App = {
     }
   }
 };
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Don't handle shortcuts when typing in inputs
+  if (e.target.matches('input, textarea, select')) return;
+
+  // Don't handle if modal is open (except Escape)
+  const modalOpen = document.querySelector('.modal.show');
+
+  // Escape - close modal
+  if (e.key === 'Escape' && modalOpen) {
+    A11y.closeModal(modalOpen);
+    return;
+  }
+
+  if (modalOpen) return;
+
+  // 1-5 - Toggle habits
+  if (e.key >= '1' && e.key <= '5') {
+    const habitIndex = parseInt(e.key) - 1;
+    const checkboxes = document.querySelectorAll('.habit-checkbox input');
+    if (checkboxes[habitIndex]) {
+      checkboxes[habitIndex].click();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  // j/k - Navigate habits
+  if (e.key === 'j' || e.key === 'k') {
+    const habitItems = document.querySelectorAll('.habit-item');
+    if (habitItems.length === 0) return;
+
+    const focused = document.activeElement.closest('.habit-item');
+    let index = focused ? Array.from(habitItems).indexOf(focused) : -1;
+
+    if (e.key === 'j') {
+      index = Math.min(index + 1, habitItems.length - 1);
+    } else {
+      index = Math.max(index - 1, 0);
+    }
+
+    const targetItem = habitItems[index];
+    const focusable = targetItem.querySelector('input, button');
+    if (focusable) {
+      focusable.focus();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  // Space - Toggle selected habit (when habit item is focused)
+  if (e.key === ' ') {
+    const focused = document.activeElement;
+    if (focused.closest('.habit-item')) {
+      const checkbox = focused.closest('.habit-item').querySelector('.habit-checkbox input');
+      if (checkbox) {
+        checkbox.click();
+        e.preventDefault();
+      }
+    }
+    return;
+  }
+
+  // n - New habit (if not at limit)
+  if (e.key === 'n') {
+    const addBtn = document.getElementById('addHabitBtn');
+    if (addBtn && !addBtn.disabled) {
+      addBtn.click();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  // ? - Show keyboard shortcuts help
+  if (e.key === '?') {
+    App.showKeyboardShortcutsHelp();
+    e.preventDefault();
+    return;
+  }
+});
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => App.init());

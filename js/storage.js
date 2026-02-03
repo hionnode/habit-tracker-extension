@@ -1,17 +1,14 @@
 // Storage layer for habit tracker using chrome.storage.local
 
 const Storage = {
-  // Get all data from storage
+  // Get all data from storage (using native MV3 Promise API)
   async getData() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['habits', 'entries', 'streakFreezes'], (result) => {
-        resolve({
-          habits: result.habits || [],
-          entries: result.entries || {},
-          streakFreezes: result.streakFreezes || {} // { habitId: ['YYYY-MM-DD', ...] }
-        });
-      });
-    });
+    const result = await chrome.storage.local.get(['habits', 'entries', 'streakFreezes']);
+    return {
+      habits: result.habits || [],
+      entries: result.entries || {},
+      streakFreezes: result.streakFreezes || {} // { habitId: ['YYYY-MM-DD', ...] }
+    };
   },
 
   // Get all habits
@@ -23,7 +20,7 @@ const Storage = {
   // Maximum number of habits allowed
   MAX_HABITS: 5,
 
-  // Save a habit (add or update)
+  // Save a habit (add or update) - using native Promise API
   async saveHabit(habit) {
     const data = await this.getData();
     const index = data.habits.findIndex(h => h.id === habit.id);
@@ -39,12 +36,10 @@ const Storage = {
       data.habits.push(habit);
     }
 
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ habits: data.habits }, resolve);
-    });
+    await chrome.storage.local.set({ habits: data.habits });
   },
 
-  // Delete a habit
+  // Delete a habit - using native Promise API
   async deleteHabit(id) {
     const data = await this.getData();
     data.habits = data.habits.filter(h => h.id !== id);
@@ -60,11 +55,9 @@ const Storage = {
       }
     }
 
-    return new Promise((resolve) => {
-      chrome.storage.local.set({
-        habits: data.habits,
-        entries: data.entries
-      }, resolve);
+    await chrome.storage.local.set({
+      habits: data.habits,
+      entries: data.entries
     });
   },
 
@@ -92,7 +85,7 @@ const Storage = {
     return data.entries;
   },
 
-  // Save an entry for a specific date and habit
+  // Save an entry for a specific date and habit - using native Promise API
   async saveEntry(date, habitId, value) {
     const data = await this.getData();
 
@@ -112,9 +105,7 @@ const Storage = {
       value: Number(value)
     };
 
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ entries: data.entries }, resolve);
-    });
+    await chrome.storage.local.set({ entries: data.entries });
   },
 
   // Export all data as JSON
@@ -140,7 +131,7 @@ const Storage = {
     return /^\d{4}-\d{2}-\d{2}$/.test(str);
   },
 
-  // Import data from JSON
+  // Import data from JSON - using native Promise API
   async importData(jsonString) {
     try {
       const data = JSON.parse(jsonString);
@@ -202,12 +193,11 @@ const Storage = {
         }
       }
 
-      return new Promise((resolve) => {
-        chrome.storage.local.set({
-          habits: sanitizedHabits,
-          entries: sanitizedEntries
-        }, () => resolve(true));
+      await chrome.storage.local.set({
+        habits: sanitizedHabits,
+        entries: sanitizedEntries
       });
+      return true;
     } catch (error) {
       console.error('Import error:', error);
       throw error;
@@ -233,20 +223,15 @@ const Storage = {
     { id: 'cat-4', name: 'Entertainment', color: '#ff4444', isDefault: true }
   ],
 
-  // Get website categories
+  // Get website categories - using native Promise API
   async getWebsiteCategories() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['websiteCategories'], (result) => {
-        resolve(result.websiteCategories || this.DEFAULT_CATEGORIES);
-      });
-    });
+    const result = await chrome.storage.local.get(['websiteCategories']);
+    return result.websiteCategories || this.DEFAULT_CATEGORIES;
   },
 
-  // Save website categories
+  // Save website categories - using native Promise API
   async saveWebsiteCategories(categories) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ websiteCategories: categories }, resolve);
-    });
+    await chrome.storage.local.set({ websiteCategories: categories });
   },
 
   // Add or update a category
@@ -270,56 +255,45 @@ const Storage = {
     return this.saveWebsiteCategories(filtered);
   },
 
-  // Get website settings (category assignments, custom names)
+  // Get website settings (category assignments, custom names) - using native Promise API
   async getWebsiteSettings() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['websiteSettings'], (result) => {
-        resolve(result.websiteSettings || {});
-      });
-    });
+    const result = await chrome.storage.local.get(['websiteSettings']);
+    return result.websiteSettings || {};
   },
 
-  // Set settings for a specific website
+  // Set settings for a specific website - using native Promise API
   async setWebsiteSetting(domain, setting) {
     const settings = await this.getWebsiteSettings();
     settings[domain] = { ...settings[domain], ...setting };
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ websiteSettings: settings }, resolve);
-    });
+    await chrome.storage.local.set({ websiteSettings: settings });
   },
 
-  // Get website entries for a date range
+  // Get website entries for a date range - using native Promise API
   async getWebsiteEntries(startDate, endDate) {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['websiteEntries'], (result) => {
-        const allEntries = result.websiteEntries || {};
-        const entries = {};
+    const result = await chrome.storage.local.get(['websiteEntries']);
+    const allEntries = result.websiteEntries || {};
+    const entries = {};
 
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = this.formatDate(d);
-          if (allEntries[dateStr]) {
-            entries[dateStr] = allEntries[dateStr];
-          }
-        }
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = this.formatDate(d);
+      if (allEntries[dateStr]) {
+        entries[dateStr] = allEntries[dateStr];
+      }
+    }
 
-        resolve(entries);
-      });
-    });
+    return entries;
   },
 
-  // Get all website entries
+  // Get all website entries - using native Promise API
   async getAllWebsiteEntries() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['websiteEntries'], (result) => {
-        resolve(result.websiteEntries || {});
-      });
-    });
+    const result = await chrome.storage.local.get(['websiteEntries']);
+    return result.websiteEntries || {};
   },
 
-  // Update website time (used by background script)
+  // Update website time (used by background script) - using native Promise API
   async updateWebsiteTime(date, domain, seconds, favicon) {
     const allEntries = await this.getAllWebsiteEntries();
 
@@ -336,9 +310,7 @@ const Storage = {
       allEntries[date][domain].favicon = favicon;
     }
 
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ websiteEntries: allEntries }, resolve);
-    });
+    await chrome.storage.local.set({ websiteEntries: allEntries });
   },
 
   // ============== Streak Freeze Methods ==============
@@ -349,38 +321,99 @@ const Storage = {
     return data.streakFreezes;
   },
 
-  // Add a streak freeze for a habit on a specific date
+  // Add a streak freeze for a habit on a specific date - using native Promise API
   async addStreakFreeze(habitId, date) {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['streakFreezes'], (result) => {
-        const freezes = result.streakFreezes || {};
-        if (!freezes[habitId]) {
-          freezes[habitId] = [];
-        }
-        if (!freezes[habitId].includes(date)) {
-          freezes[habitId].push(date);
-        }
-        chrome.storage.local.set({ streakFreezes: freezes }, resolve);
-      });
-    });
+    const result = await chrome.storage.local.get(['streakFreezes']);
+    const freezes = result.streakFreezes || {};
+    if (!freezes[habitId]) {
+      freezes[habitId] = [];
+    }
+    if (!freezes[habitId].includes(date)) {
+      freezes[habitId].push(date);
+    }
+    await chrome.storage.local.set({ streakFreezes: freezes });
   },
 
-  // Remove a streak freeze
+  // Remove a streak freeze - using native Promise API
   async removeStreakFreeze(habitId, date) {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['streakFreezes'], (result) => {
-        const freezes = result.streakFreezes || {};
-        if (freezes[habitId]) {
-          freezes[habitId] = freezes[habitId].filter(d => d !== date);
-        }
-        chrome.storage.local.set({ streakFreezes: freezes }, resolve);
-      });
-    });
+    const result = await chrome.storage.local.get(['streakFreezes']);
+    const freezes = result.streakFreezes || {};
+    if (freezes[habitId]) {
+      freezes[habitId] = freezes[habitId].filter(d => d !== date);
+    }
+    await chrome.storage.local.set({ streakFreezes: freezes });
   },
 
   // Check if a date has a streak freeze for a habit
   async hasStreakFreeze(habitId, date) {
     const freezes = await this.getStreakFreezes();
     return freezes[habitId]?.includes(date) || false;
+  },
+
+  // ============== Storage Cleanup Methods ==============
+
+  // Days to retain website data (default 90 days)
+  WEBSITE_RETENTION_DAYS: 90,
+
+  // Days to retain habit entries (default 400 days, ~13 months for year view)
+  HABIT_RETENTION_DAYS: 400,
+
+  // Clean up old website entries to prevent unbounded storage growth - using native Promise API
+  async cleanupOldWebsiteEntries() {
+    const allEntries = await this.getAllWebsiteEntries();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.WEBSITE_RETENTION_DAYS);
+    const cutoffStr = this.formatDate(cutoffDate);
+
+    let cleaned = 0;
+    const cleanedEntries = {};
+
+    for (const [dateKey, dayEntries] of Object.entries(allEntries)) {
+      if (dateKey >= cutoffStr) {
+        cleanedEntries[dateKey] = dayEntries;
+      } else {
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      await chrome.storage.local.set({ websiteEntries: cleanedEntries });
+      console.log(`Storage cleanup: removed ${cleaned} old website entry days`);
+    }
+
+    return cleaned;
+  },
+
+  // Clean up old habit entries (keep more history for year view) - using native Promise API
+  async cleanupOldHabitEntries() {
+    const data = await this.getData();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.HABIT_RETENTION_DAYS);
+    const cutoffStr = this.formatDate(cutoffDate);
+
+    let cleaned = 0;
+    const cleanedEntries = {};
+
+    for (const [dateKey, dayEntries] of Object.entries(data.entries)) {
+      if (dateKey >= cutoffStr) {
+        cleanedEntries[dateKey] = dayEntries;
+      } else {
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      await chrome.storage.local.set({ entries: cleanedEntries });
+      console.log(`Storage cleanup: removed ${cleaned} old habit entry days`);
+    }
+
+    return cleaned;
+  },
+
+  // Run all cleanup tasks
+  async runCleanup() {
+    const websiteCleaned = await this.cleanupOldWebsiteEntries();
+    const habitCleaned = await this.cleanupOldHabitEntries();
+    return { websiteCleaned, habitCleaned };
   }
 };

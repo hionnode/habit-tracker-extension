@@ -1,10 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Habit Tracker",
-  "version": "1.0.0",
-  "description": "A minimal habit tracker that replaces your new tab page with a year visualization",
-  "permissions": ["storage", "tabs", "idle", "alarms", "scripting"],
-  "host_permissions": ["<all_urls>"],
+  "version": "2.0.0",
+  "description": "An elegant habit tracker that replaces your new tab page with a year visualization and mindful website time management",
+  "permissions": [
+    "storage",
+    "tabs",
+    "idle",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
   "background": {
     "service_worker": "js/background.js"
   },
@@ -12,7 +20,7 @@
     "newtab": "newtab.html"
   },
   "content_scripts": [{
-    "matches": ["<all_urls>"],
+    "matches": ["http://*/*", "https://*/*"],
     "js": ["js/content.js"],
     "run_at": "document_start"
   }],

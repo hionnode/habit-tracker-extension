@@ -38,46 +38,18 @@
     }
   }
 
-  // Breathing exercise definitions
-  const breathingExercises = {
-    box: {
-      name: 'Box',
-      steps: [
-        { action: 'Inhale', duration: 4 },
-        { action: 'Hold', duration: 4 },
-        { action: 'Exhale', duration: 4 },
-        { action: 'Hold', duration: 4 }
-      ]
-    },
-    deep: {
-      name: 'Deep',
-      steps: [
-        { action: 'Inhale', duration: 5 },
-        { action: 'Exhale', duration: 5 }
-      ]
-    },
-    anulom: {
-      name: 'Anulom',
-      steps: [
-        { action: 'Inhale left', duration: 4 },
-        { action: 'Hold', duration: 2 },
-        { action: 'Exhale right', duration: 4 },
-        { action: 'Inhale right', duration: 4 },
-        { action: 'Hold', duration: 2 },
-        { action: 'Exhale left', duration: 4 }
-      ]
-    },
-    conscious: {
-      name: 'Conscious',
-      steps: [
-        { action: 'Inhale', duration: 4 },
-        { action: 'Exhale', duration: 4 }
-      ]
-    }
+  // Box Breathing exercise (most researched, simplest to follow)
+  const boxBreathing = {
+    name: 'Box',
+    steps: [
+      { action: 'Inhale', duration: 4 },
+      { action: 'Hold', duration: 4 },
+      { action: 'Exhale', duration: 4 },
+      { action: 'Hold', duration: 4 }
+    ]
   };
 
   // Settings state
-  let selectedExercise = 'box';
   let selectedDuration = 120; // 2 minutes default
   let breathingInterval = null;
   let isActive = false;
@@ -341,17 +313,8 @@
         </svg>
       </button>
 
-      <!-- Settings panel -->
+      <!-- Settings panel (simplified - duration only) -->
       <div class="htb-settings-panel" id="htb-settings-panel">
-        <div class="htb-settings-group">
-          <div class="htb-settings-label">Style</div>
-          <div class="htb-settings-options" id="htb-style-options">
-            <button class="htb-settings-option active" data-style="box">Box</button>
-            <button class="htb-settings-option" data-style="deep">Deep</button>
-            <button class="htb-settings-option" data-style="anulom">Anulom</button>
-            <button class="htb-settings-option" data-style="conscious">Conscious</button>
-          </div>
-        </div>
         <div class="htb-settings-group">
           <div class="htb-settings-label">Duration</div>
           <div class="htb-settings-options" id="htb-duration-options">
@@ -423,15 +386,6 @@
       }
     });
 
-    // Style options
-    document.querySelectorAll('#htb-style-options .htb-settings-option').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#htb-style-options .htb-settings-option').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        selectedExercise = btn.dataset.style;
-      });
-    });
-
     // Duration options
     document.querySelectorAll('#htb-duration-options .htb-settings-option').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -450,7 +404,7 @@
 
   function startBreathingExercise() {
     isActive = true;
-    const exercise = breathingExercises[selectedExercise];
+    const exercise = boxBreathing;
 
     const circle = document.getElementById('htb-breathing-circle');
     const countdown = document.getElementById('htb-countdown');

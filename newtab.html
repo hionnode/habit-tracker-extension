@@ -40,14 +40,14 @@
       </div>
 
       <div class="section-websites">
-        <button class="websites-header collapsible-header" id="websitesToggle" aria-expanded="true">
-          <h2 class="section-title">Website Usage</h2>
+        <button class="websites-header collapsible-header" id="websitesToggle" aria-expanded="false">
+          <h2 class="section-title">Screen Time</h2>
           <span class="websites-header-right">
             <span class="websites-total-time" id="websitesTotalTime">0m</span>
             <span class="collapse-icon"></span>
           </span>
         </button>
-        <div class="category-groups collapsible-content expanded" id="categoryGroups"></div>
+        <div class="category-groups collapsible-content" id="categoryGroups"></div>
       </div>
     </section>
 
@@ -71,9 +71,9 @@
   </footer>
 
   <!-- Add Habit Modal -->
-  <div class="modal" id="addHabitModal">
+  <div class="modal" id="addHabitModal" role="dialog" aria-modal="true" aria-labelledby="addHabitTitle">
     <div class="modal-content">
-      <h3>Add New Habit</h3>
+      <h3 id="addHabitTitle">Add New Habit</h3>
       <form id="addHabitForm">
         <div class="form-group">
           <label for="habitName">Habit Name</label>
@@ -100,9 +100,9 @@
   </div>
 
   <!-- Settings Modal -->
-  <div class="modal" id="settingsModal">
+  <div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <div class="modal-content settings-modal-content">
-      <h3>Settings</h3>
+      <h3 id="settingsTitle">Settings</h3>
       <div class="settings-section">
         <h4>Manage Habits</h4>
         <div class="habits-manage-list" id="habitsManageList"></div>
@@ -119,11 +119,12 @@
   </div>
 
   <!-- Website Detail Modal -->
-  <div class="modal" id="websiteDetailModal">
+  <div class="modal" id="websiteDetailModal" role="dialog" aria-modal="true" aria-labelledby="detailDomain">
     <div class="modal-content website-detail-content">
       <div class="website-detail-header">
         <img class="website-detail-favicon" id="detailFavicon" src="" alt="">
         <h3 id="detailDomain">example.com</h3>
+        <button type="button" class="modal-close-btn" id="closeDetailBtnX" aria-label="Close dialog">&times;</button>
       </div>
       <div class="website-detail-time">
         <span class="detail-time-value" id="detailTodayTime">0m</span>
@@ -158,11 +159,11 @@
   </div>
 
 <!-- Habit Detail Modal -->
-  <div class="modal" id="habitDetailModal">
+  <div class="modal" id="habitDetailModal" role="dialog" aria-modal="true" aria-labelledby="habitDetailName">
     <div class="modal-content habit-detail-content">
       <div class="habit-detail-header">
         <h3 id="habitDetailName">Habit Name</h3>
-        <button type="button" class="modal-close-btn" id="closeHabitDetailBtn">&times;</button>
+        <button type="button" class="modal-close-btn" id="closeHabitDetailBtn" aria-label="Close dialog">&times;</button>
       </div>
       <div class="habit-detail-chart-container" id="habitDetailYearChart"></div>
       <div class="habit-detail-stats">
@@ -195,9 +196,9 @@
   </div>
 
   <!-- Add Category Modal -->
-  <div class="modal" id="addCategoryModal">
+  <div class="modal" id="addCategoryModal" role="dialog" aria-modal="true" aria-labelledby="addCategoryTitle">
     <div class="modal-content">
-      <h3>Add Category</h3>
+      <h3 id="addCategoryTitle">Add Category</h3>
       <form id="addCategoryForm">
         <div class="form-group">
           <label for="categoryName">Category Name</label>
@@ -216,9 +217,9 @@
   </div>
 
   <!-- Edit Habit Modal -->
-  <div class="modal" id="editHabitModal">
+  <div class="modal" id="editHabitModal" role="dialog" aria-modal="true" aria-labelledby="editHabitTitle">
     <div class="modal-content">
-      <h3>Edit Habit</h3>
+      <h3 id="editHabitTitle">Edit Habit</h3>
       <form id="editHabitForm">
         <input type="hidden" id="editHabitId">
         <div class="form-group">
@@ -248,6 +249,7 @@
   <!-- Confetti Canvas -->
   <canvas id="confettiCanvas"></canvas>
 
+  <script src="js/lib/anime.min.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/habits.js"></script>
   <script src="js/chart.js"></script>
@@ -256,6 +258,8 @@
   <script src="js/a11y.js"></script>
   <script src="js/toast.js"></script>
   <script src="js/confetti.js"></script>
+  <script src="js/animations.js"></script>
+  <script src="js/onboarding.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

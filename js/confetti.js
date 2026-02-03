@@ -22,8 +22,22 @@ const Confetti = {
     this.canvas.height = window.innerHeight;
   },
 
+  // Default colors
+  defaultColors: ['#50c878', '#4a9eff', '#ff9500', '#ffcc00', '#9b59b6'],
+
+  // Tier-specific colors for milestone celebrations
+  tierColors: {
+    bronze: ['#cd7f32', '#b87333', '#8b4513', '#d2691e'],
+    silver: ['#c0c0c0', '#a8a8a8', '#d3d3d3', '#e8e8e8'],
+    gold: ['#ffd700', '#ffcc00', '#f0c000', '#daa520'],
+    platinum: ['#e5e4e2', '#d4d4d4', '#c0c0c0', '#f0f0f0', '#ffd700']
+  },
+
+  // Current color set (can be changed for milestone celebrations)
+  currentColors: null,
+
   createParticle(x, y) {
-    const colors = ['#50c878', '#4a9eff', '#ff9500', '#ff4444', '#ffcc00', '#9b59b6'];
+    const colors = this.currentColors || this.defaultColors;
     return {
       x: x,
       y: y,
@@ -45,29 +59,38 @@ const Confetti = {
     }
   },
 
-  celebrate() {
+  celebrate(tier = null) {
     if (this.isRunning) return;
     this.isRunning = true;
     this.particles = [];
+
+    // Use tier colors if specified
+    this.currentColors = tier ? this.tierColors[tier] : this.defaultColors;
 
     // Burst from multiple points across the screen
     const centerX = window.innerWidth / 2;
     const topY = window.innerHeight * 0.3;
 
-    this.burst(centerX, topY, 60);
+    // More particles for higher tiers
+    const particleMultiplier = tier === 'platinum' ? 2 : tier === 'gold' ? 1.5 : 1;
+    const baseCount = Math.round(60 * particleMultiplier);
+
+    this.burst(centerX, topY, baseCount);
 
     // Delayed side bursts
     setTimeout(() => {
-      this.burst(centerX - 150, topY + 50, 30);
-      this.burst(centerX + 150, topY + 50, 30);
+      this.burst(centerX - 150, topY + 50, Math.round(30 * particleMultiplier));
+      this.burst(centerX + 150, topY + 50, Math.round(30 * particleMultiplier));
     }, 100);
 
     this.animate();
 
-    // Stop after 3 seconds
+    // Stop after 3 seconds (longer for big milestones)
+    const duration = tier === 'platinum' ? 4000 : tier === 'gold' ? 3500 : 3000;
     setTimeout(() => {
       this.stop();
-    }, 3000);
+      this.currentColors = null;
+    }, duration);
   },
 
   animate() {

@@ -16,9 +16,12 @@ const WebsiteTracker = {
   // Track which domains are currently blocked (in-memory cache)
   blockedDomains: new Set(),
 
-  init() {
+  async init() {
     // Set up idle detection
     chrome.idle.setDetectionInterval(this.IDLE_THRESHOLD);
+
+    // Restore blocked state from session storage (survives service worker termination)
+    await this.restoreBlockedState();
 
     // Initialize blocking system
     this.initBlockingSystem();
@@ -218,6 +221,11 @@ const WebsiteTracker = {
       periodInMinutes: 0.5 // 30 seconds
     });
 
+    // Storage cleanup alarm - runs once per day
+    chrome.alarms.create('storageCleanup', {
+      periodInMinutes: 24 * 60 // Once per day
+    });
+
     chrome.alarms.onAlarm.addListener((alarm) => {
       if (alarm.name === 'saveWebsiteTime') {
         this.saveCurrentTime();
@@ -225,7 +233,52 @@ const WebsiteTracker = {
       if (alarm.name === 'dailyLimitReset') {
         this.clearAllBlockRules();
       }
+      if (alarm.name === 'storageCleanup') {
+        this.runStorageCleanup();
+      }
     });
+  },
+
+  // Run storage cleanup to prevent unbounded growth
+  async runStorageCleanup() {
+    try {
+      // Access Storage via chrome.storage since this is a service worker
+      const result = await chrome.storage.local.get(['websiteEntries', 'entries']);
+
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 90); // 90 days for websites
+      const websiteCutoff = this.formatDate(cutoffDate);
+
+      cutoffDate.setDate(cutoffDate.getDate() - 310); // 400 days total for habits
+      const habitCutoff = this.formatDate(cutoffDate);
+
+      // Clean website entries
+      const websiteEntries = result.websiteEntries || {};
+      const cleanedWebsiteEntries = {};
+      for (const [date, entries] of Object.entries(websiteEntries)) {
+        if (date >= websiteCutoff) {
+          cleanedWebsiteEntries[date] = entries;
+        }
+      }
+
+      // Clean habit entries
+      const habitEntries = result.entries || {};
+      const cleanedHabitEntries = {};
+      for (const [date, entries] of Object.entries(habitEntries)) {
+        if (date >= habitCutoff) {
+          cleanedHabitEntries[date] = entries;
+        }
+      }
+
+      await chrome.storage.local.set({
+        websiteEntries: cleanedWebsiteEntries,
+        entries: cleanedHabitEntries
+      });
+
+      console.log('Storage cleanup completed');
+    } catch (e) {
+      console.error('Storage cleanup error:', e);
+    }
   },
 
   // Initialize blocking system on startup
@@ -257,6 +310,32 @@ const WebsiteTracker = {
     return usedSeconds >= domainSettings.dailyLimitSeconds;
   },
 
+  // Persist blocked state to session storage (survives service worker termination)
+  async persistBlockedState() {
+    try {
+      await chrome.storage.session.set({
+        blockedDomains: Array.from(this.blockedDomains)
+      });
+    } catch (e) {
+      console.error('Error persisting blocked state:', e);
+    }
+  },
+
+  // Restore blocked state from session storage
+  async restoreBlockedState() {
+    try {
+      const { blockedDomains } = await chrome.storage.session.get(['blockedDomains']);
+      this.blockedDomains = new Set(blockedDomains || []);
+      console.log('Restored blocked domains:', this.blockedDomains.size);
+
+      // Re-check all time limits in case they changed while service worker was inactive
+      await this.checkAllTimeLimits();
+    } catch (e) {
+      console.error('Error restoring blocked state:', e);
+      this.blockedDomains = new Set();
+    }
+  },
+
   // Block a domain by notifying content scripts
   async addBlockRule(domain) {
     if (this.blockedDomains.has(domain)) return;
@@ -265,6 +344,10 @@ const WebsiteTracker = {
     const limit = result.websiteSettings?.[domain]?.dailyLimitSeconds || 0;
 
     this.blockedDomains.add(domain);
+
+    // Persist to session storage
+    await this.persistBlockedState();
+
     console.log(`Blocked domain: ${domain}`);
 
     // Send block message to all tabs with this domain
@@ -290,12 +373,14 @@ const WebsiteTracker = {
   // Remove block for a domain (not used much since blocks reset at midnight)
   async removeBlockRule(domain) {
     this.blockedDomains.delete(domain);
+    await this.persistBlockedState();
     console.log(`Unblocked domain: ${domain}`);
   },
 
   // Clear all blocks (used on daily reset)
   async clearAllBlockRules() {
     this.blockedDomains.clear();
+    await this.persistBlockedState();
     console.log('Cleared all block rules');
   },
 
