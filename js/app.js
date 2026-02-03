@@ -673,18 +673,30 @@ const App = {
     const container = document.getElementById('selectedDayDetails');
     const todayStr = Storage.formatDate(new Date());
 
+    // Clear container safely
+    container.innerHTML = '';
+
     if (dateStr === todayStr) {
-      container.innerHTML = '';
       return;
     }
 
     const rate = await Habits.getCompletionRate(dateStr);
-    container.innerHTML = `
-      <div class="day-details">
-        <span class="day-details-date">${dateStr}</span>
-        <span class="day-details-rate">${Math.round(rate * 100)}% completed</span>
-      </div>
-    `;
+
+    // Build DOM safely to prevent XSS
+    const details = document.createElement('div');
+    details.className = 'day-details';
+
+    const dateSpan = document.createElement('span');
+    dateSpan.className = 'day-details-date';
+    dateSpan.textContent = dateStr;
+
+    const rateSpan = document.createElement('span');
+    rateSpan.className = 'day-details-rate';
+    rateSpan.textContent = `${Math.round(rate * 100)}% completed`;
+
+    details.appendChild(dateSpan);
+    details.appendChild(rateSpan);
+    container.appendChild(details);
   },
 
   // Bind habit-specific events

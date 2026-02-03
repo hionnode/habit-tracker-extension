@@ -46,6 +46,9 @@ css/styles.css       Dark theme, three-column layout
 // Habit Entry (per date, per habit)
 { completed: boolean, value: number }
 
+// Streak Freezes (per habit)
+{ habitId: ['YYYY-MM-DD', ...] }  // dates where streak is protected
+
 // Website Entry (per date, per domain)
 { totalSeconds: number, favicon: string }
 
@@ -59,6 +62,7 @@ css/styles.css       Dark theme, three-column layout
 {
   habits: [],
   entries: { 'YYYY-MM-DD': { habitId: entry } },
+  streakFreezes: { habitId: ['YYYY-MM-DD', ...] },
   websiteEntries: { 'YYYY-MM-DD': { domain: websiteEntry } },
   websiteSettings: { domain: settings },
   websiteCategories: []
@@ -70,8 +74,13 @@ css/styles.css       Dark theme, three-column layout
 ### Habit Tracking
 - Binary (done/not done) and count-based habits
 - Year-at-a-glance visualization (7 columns × 53 rows)
-- Streak calculation and display
+- Streak calculation and display (inline next to habit names)
 - Maximum 5 habits
+- **Habit editing** - modify name, type, target without deleting
+- **Habit templates** - quick-start with Exercise, Read, Meditate, Water, Sleep
+- **Backfill entries** - edit habits for past dates (not just today)
+- **Streak freeze** - protect streak on missed days (grace day feature)
+- **Daily progress ring** - visual indicator showing completion status
 
 ### Website Time Tracking
 - Automatic tracking via background service worker
@@ -89,6 +98,32 @@ css/styles.css       Dark theme, three-column layout
 - Settings hidden behind gear icon (power users only)
 - Blocks reset at midnight
 
+## Security
+
+**XSS Prevention:** All user-provided data (habit names, category names, domains) must use safe DOM methods:
+- Use `textContent` instead of `innerHTML` for text content
+- Use `createElement` + `appendChild` for dynamic HTML
+- Use `dataset` for data attributes
+- `Storage.sanitizeString()` available for import validation
+- **Audited 2026-02:** All dynamic content rendering verified to use safe DOM methods
+
+**Import Validation:** `Storage.importData()` sanitizes all string fields and validates structure before saving.
+
+**Permissions:** Extension uses minimal required permissions:
+- `storage` - Store habit and website data locally
+- `tabs` - Track active tab for website time tracking
+- `idle` - Detect user inactivity to pause tracking
+- `alarms` - Periodic saves and daily limit resets
+- Host permissions limited to `http://` and `https://` (excludes chrome://, file://, etc.)
+
+## Storage Management
+
+**Automatic Cleanup:** To prevent unbounded storage growth:
+- Website entries older than 90 days are automatically pruned
+- Habit entries older than 400 days (~13 months) are pruned
+- Cleanup runs daily via background service worker alarm
+- Manual cleanup available via `Storage.runCleanup()`
+
 ## Constraints
 
 - Maximum 5 habits (enforced in `Storage.saveHabit()`)
@@ -96,3 +131,5 @@ css/styles.css       Dark theme, three-column layout
 - Year charts are vertical: 7 columns (days) × 53 rows (weeks)
 - Website tracking only for http/https URLs (skips chrome://, etc.)
 - Content script runs at `document_start` for early blocking
+- Habits can only be edited for past/present dates, not future
+- Website data retained for 90 days, habit data for 400 days

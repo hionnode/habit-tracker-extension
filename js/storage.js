@@ -382,5 +382,76 @@ const Storage = {
   async hasStreakFreeze(habitId, date) {
     const freezes = await this.getStreakFreezes();
     return freezes[habitId]?.includes(date) || false;
+  },
+
+  // ============== Storage Cleanup Methods ==============
+
+  // Days to retain website data (default 90 days)
+  WEBSITE_RETENTION_DAYS: 90,
+
+  // Days to retain habit entries (default 400 days, ~13 months for year view)
+  HABIT_RETENTION_DAYS: 400,
+
+  // Clean up old website entries to prevent unbounded storage growth
+  async cleanupOldWebsiteEntries() {
+    const allEntries = await this.getAllWebsiteEntries();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.WEBSITE_RETENTION_DAYS);
+    const cutoffStr = this.formatDate(cutoffDate);
+
+    let cleaned = 0;
+    const cleanedEntries = {};
+
+    for (const [dateKey, dayEntries] of Object.entries(allEntries)) {
+      if (dateKey >= cutoffStr) {
+        cleanedEntries[dateKey] = dayEntries;
+      } else {
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      await new Promise((resolve) => {
+        chrome.storage.local.set({ websiteEntries: cleanedEntries }, resolve);
+      });
+      console.log(`Storage cleanup: removed ${cleaned} old website entry days`);
+    }
+
+    return cleaned;
+  },
+
+  // Clean up old habit entries (keep more history for year view)
+  async cleanupOldHabitEntries() {
+    const data = await this.getData();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - this.HABIT_RETENTION_DAYS);
+    const cutoffStr = this.formatDate(cutoffDate);
+
+    let cleaned = 0;
+    const cleanedEntries = {};
+
+    for (const [dateKey, dayEntries] of Object.entries(data.entries)) {
+      if (dateKey >= cutoffStr) {
+        cleanedEntries[dateKey] = dayEntries;
+      } else {
+        cleaned++;
+      }
+    }
+
+    if (cleaned > 0) {
+      await new Promise((resolve) => {
+        chrome.storage.local.set({ entries: cleanedEntries }, resolve);
+      });
+      console.log(`Storage cleanup: removed ${cleaned} old habit entry days`);
+    }
+
+    return cleaned;
+  },
+
+  // Run all cleanup tasks
+  async runCleanup() {
+    const websiteCleaned = await this.cleanupOldWebsiteEntries();
+    const habitCleaned = await this.cleanupOldHabitEntries();
+    return { websiteCleaned, habitCleaned };
   }
 };
