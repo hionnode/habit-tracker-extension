@@ -16,9 +16,12 @@ const WebsiteTracker = {
   // Track which domains are currently blocked (in-memory cache)
   blockedDomains: new Set(),
 
-  init() {
+  async init() {
     // Set up idle detection
     chrome.idle.setDetectionInterval(this.IDLE_THRESHOLD);
+
+    // Restore blocked state from session storage (survives service worker termination)
+    await this.restoreBlockedState();
 
     // Initialize blocking system
     this.initBlockingSystem();
@@ -307,6 +310,32 @@ const WebsiteTracker = {
     return usedSeconds >= domainSettings.dailyLimitSeconds;
   },
 
+  // Persist blocked state to session storage (survives service worker termination)
+  async persistBlockedState() {
+    try {
+      await chrome.storage.session.set({
+        blockedDomains: Array.from(this.blockedDomains)
+      });
+    } catch (e) {
+      console.error('Error persisting blocked state:', e);
+    }
+  },
+
+  // Restore blocked state from session storage
+  async restoreBlockedState() {
+    try {
+      const { blockedDomains } = await chrome.storage.session.get(['blockedDomains']);
+      this.blockedDomains = new Set(blockedDomains || []);
+      console.log('Restored blocked domains:', this.blockedDomains.size);
+
+      // Re-check all time limits in case they changed while service worker was inactive
+      await this.checkAllTimeLimits();
+    } catch (e) {
+      console.error('Error restoring blocked state:', e);
+      this.blockedDomains = new Set();
+    }
+  },
+
   // Block a domain by notifying content scripts
   async addBlockRule(domain) {
     if (this.blockedDomains.has(domain)) return;
@@ -315,6 +344,10 @@ const WebsiteTracker = {
     const limit = result.websiteSettings?.[domain]?.dailyLimitSeconds || 0;
 
     this.blockedDomains.add(domain);
+
+    // Persist to session storage
+    await this.persistBlockedState();
+
     console.log(`Blocked domain: ${domain}`);
 
     // Send block message to all tabs with this domain
@@ -340,12 +373,14 @@ const WebsiteTracker = {
   // Remove block for a domain (not used much since blocks reset at midnight)
   async removeBlockRule(domain) {
     this.blockedDomains.delete(domain);
+    await this.persistBlockedState();
     console.log(`Unblocked domain: ${domain}`);
   },
 
   // Clear all blocks (used on daily reset)
   async clearAllBlockRules() {
     this.blockedDomains.clear();
+    await this.persistBlockedState();
     console.log('Cleared all block rules');
   },
 

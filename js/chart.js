@@ -299,7 +299,8 @@ const Chart = {
   getMiniChartColor(completed, isFuture) {
     if (isFuture) return '#2a2a2a';
     if (completed === null) return '#2a2a2a'; // Before habit existed
-    return completed ? '#50c878' : '#ff4444';
+    // Use consistent amber (growth-oriented) instead of harsh red (shame-inducing)
+    return completed ? '#50c878' : Habits.getColor(0, false);
   },
 
   // Render a combined mini year chart showing overall completion
@@ -430,7 +431,8 @@ const Chart = {
       } else {
         const entry = entries[dateStr]?.[habitId];
         const completed = Habits.isCompleted(entry, habit);
-        color = completed ? '#50c878' : '#ff4444';
+        // Use consistent amber (growth-oriented) instead of harsh red
+        color = completed ? '#50c878' : Habits.getColor(0, false);
       }
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -528,7 +530,8 @@ const Chart = {
       if (isFuture || isBeforeHabit) {
         color = '#2a2a2a';
       } else {
-        color = completed ? '#50c878' : '#ff4444';
+        // Use consistent amber (growth-oriented) instead of harsh red
+        color = completed ? '#50c878' : Habits.getColor(0, false);
       }
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');

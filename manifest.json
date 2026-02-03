@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Habit Tracker",
-  "version": "1.0.1",
-  "description": "A minimal habit tracker that replaces your new tab page with a year visualization and mindful website time management",
+  "version": "2.0.0",
+  "description": "An elegant habit tracker that replaces your new tab page with a year visualization and mindful website time management",
   "permissions": [
     "storage",
     "tabs",
